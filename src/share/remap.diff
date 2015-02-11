@@ -1,0 +1,1808 @@
+Index: prim_advection_mod.F90
+===================================================================
+--- prim_advection_mod.F90	(revision 1427)
++++ prim_advection_mod.F90	(revision 1426)
+@@ -84,543 +84,1033 @@
+ 
+ 
+ 
+-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-!! Begin GPU remap module  !!
+-!! by Rick Archibald, 2010  !!
+-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+-module vertremap_mod
+-
++MODULE pcmpsm_no_pbc
++  !
+   !**************************************************************************************
+   !
+   !  Purpose:
+-  !        Construct sub-grid-scale polynomials using piecewise spline method with 
+-  !        monotone filters.
++  !  Construct sub-grid-scale polynomials using piecewise cubic method (PCM) or 
++  !  piecewise spline method with optional monotone filters.
+   !
+   !  References: PCM - Zerroukat et al., Q.J.R. Meteorol. Soc., 2005. (ZWS2005QJR)
+   !              PSM - Zerroukat et al., Int. J. Numer. Meth. Fluids, 2005. (ZWS2005IJMF)
+   !
++  !
++  !      Date       Programmer       Affiliation          Description of change
++  !      ====       ==========       ===========          =====================
++  !    3/13/06      P.H.Lauritzen    CMS,NCAR             Original code
++  !
+   !**************************************************************************************
++  !
++  USE kinds, only : real_kind, int_kind
++!  USE constants        ! common constants
++  IMPLICIT NONE
+ 
+-  use kinds, only          : real_kind,int_kind
+-  use dimensions_mod, only : nv,np,nlev,qsize,nlevp
+-  use hybvcoord_mod, only  : hvcoord_t
+-  use element_mod, only    : element_t
+-  use perf_mod, only	   : t_startf, t_stopf  ! _EXTERNAL
+-  	
+-  contains
++  real(kind=real_kind) :: zero=0
++  real(kind=real_kind) :: one=1
++  real(kind=real_kind) :: two=2
++  real(kind=real_kind) :: three=3
++  real(kind=real_kind) :: four=4
++  real(kind=real_kind) :: six=6
++  real(kind=real_kind) :: nine=9
++  real(kind=real_kind) :: twelfe=12
++  real(kind=real_kind) :: half = .5
++  real(kind=real_kind) :: third = 1/3d0
++  REAL(KIND=real_kind) :: tiny = 1e-12
+ 
+-  subroutine remap_velocityUV(np1,dt,elem,hvcoord,nets,nete)
+-
+-    implicit none
+-    real (kind=real_kind),  intent(in)          :: dt
+-    type (element_t),    intent(inout), target  :: elem(:)
+-    type (hvcoord_t),    intent(in)             :: hvcoord
++CONTAINS
++  SUBROUTINE CUBIC_PARAMETERS(y_left_cv,mass,dy,a0,a1,a2,a3,piecewise,ns,nf)
++    !
++    ! CUBIC_PARAMETERS computes left and right boundary values of cv 
++    ! and the slope at the centre of cv
++    ! y_left_cv   = left position of CV 
++    ! mass        = mass of CV
++    ! dy          = size (1-DIMENSIONal lenght) of CV
++    ! a0,a1,a2,a3 = coefficents of cubic 
++    ! piecewise   =piecewise option (0(constant, 1 linear, 2 Parabolic and 3 Cubic)
++    !
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  ns, nf, piecewise, j
++    REAL(KIND=real_kind), DIMENSION(ns:nf+1) :: y_left_cv
++    REAL(KIND=real_kind), DIMENSION(ns:nf):: mass,dy,a0,a1,a2,a3
+     
+-    integer :: nets,nete,np1
+-     
+-    ! ========================
+-    ! Local Variables
+-    ! ========================
++    !  locals
++    REAL(KIND=real_kind), DIMENSION(ns:nf):: rho_left_cv,rho_right_cv,slope_rho
++    REAL(KIND=real_kind), DIMENSION(ns:nf):: y_centre_cv, rho_bar
++    INTEGER(KIND=int_kind), PARAMETER :: standard_number_of_cvs = 4
++    REAL(KIND=real_kind), DIMENSION(ns:nf+1) :: rho_left_cv_all,slope_im,slope_ip
++    INTEGER(KIND=int_kind) :: j0, j1, cv_start
++    REAL(KIND=real_kind) :: y0, y1, y2, y3, y4, y, m1, m2, m3, m4
++    
++    a0=zero; a1=zero;a2=zero;a3=zero
++    
++    j0 = standard_number_of_cvs/2
++    j1 = standard_number_of_cvs - 1
++    rho_left_cv_all=zero ; slope_im=zero; slope_ip=zero
++    y_centre_cv = half * ( y_left_cv(ns:nf) + y_left_cv(ns+1:nf+1) ) 
++    
++    IF ((nf - ns + 1) < 4 ) THEN  ! use piecewise constant for less than 4 CVs
++       a0 = mass/dy
++       RETURN
++    ENDIF
++    
++    DO j = ns , nf + 1
++       !
++       ! Use extrapolation if neccesary
++       !
++       cv_start = MIN( MAX( j - j0, ns ) + j1, nf ) - j1
++       !
++       y0 = y_left_cv(cv_start)
++       y1 = y_left_cv(cv_start+1) - y0  !change of variable (y) to have y0=0
++       y2 = y_left_cv(cv_start+2) - y0
++       y3 = y_left_cv(cv_start+3) - y0
++       y4 = y_left_cv(cv_start+4) - y0
++       m1 =   mass(cv_start)
++       m2 =   mass(cv_start+1) + m1
++       m3 =   mass(cv_start+2) + m2
++       m4 =   mass(cv_start+3) + m3 
++       m1 = m1 / (y1*(y1-y2)*(y1-y3)*(y1-y4))
++       m2 = m2 / (y2*(y2-y1)*(y2-y3)*(y2-y4))
++       m3 = m3 / (y3*(y3-y1)*(y3-y2)*(y3-y4))      
++       m4 = m4 / (y4*(y4-y1)*(y4-y2)*(y4-y3))
++       
++       y  = y_left_cv(j) - y0
++       rho_left_cv_all(j) =                                                   &
++            (y*(y*(four*y-three*(y2+y3+y4))+two*(y3*y2+y2*y4+y3*y4))-y3*y2*y4)*m1+   &
++            (y*(y*(four*y-three*(y1+y3+y4))+two*(y1*y3+y1*y4+y3*y4))-y1*y3*y4)*m2+   &   
++            (y*(y*(four*y-three*(y2+y4+y1))+two*(y2*y4+y1*y2+y1*y4))-y1*y2*y4)*m3+   &
++            (y*(y*(four*y-three*(y2+y3+y1))+two*(y3*y2+y1*y2+y1*y3))-y1*y2*y3)*m4   
++       y  = y_centre_cv( MAX( ns, j - 1 ) ) - y0
++       slope_im(j) =                                                &       
++            (y*(twelfe*y-six*(y2+y3+y4))+two*(y3*y2+y2*y4+y3*y4))*m1+    &
++            (y*(twelfe*y-six*(y1+y3+y4))+two*(y1*y3+y1*y4+y3*y4))*m2+    &
++            (y*(twelfe*y-six*(y2+y4+y1))+two*(y2*y4+y1*y2+y1*y4))*m3+    &
++            (y*(twelfe*y-six*(y2+y3+y1))+two*(y3*y2+y1*y2+y1*y3))*m4
++       y  = y_centre_cv( MIN( j, nf    ) ) - y0
++       slope_ip(j) =                                                &
++            (y*(twelfe*y-six*(y2+y3+y4))+two*(y3*y2+y2*y4+y3*y4))*m1+    &
++            (y*(twelfe*y-six*(y1+y3+y4))+two*(y1*y3+y1*y4+y3*y4))*m2+    &
++            (y*(twelfe*y-six*(y2+y4+y1))+two*(y2*y4+y1*y2+y1*y4))*m3+    &
++            (y*(twelfe*y-six*(y2+y3+y1))+two*(y3*y2+y1*y2+y1*y3))*m4   
++    ENDDO
++    
++    rho_bar = mass / dy 
++    
++    rho_left_cv_all(ns  ) = rho_bar(ns)
++    rho_left_cv_all(ns+1) = half*(rho_bar(ns) + rho_bar(ns+1))
++    rho_left_cv_all(nf+1) = rho_bar(nf)
++    rho_left_cv_all(nf  ) = half*(rho_bar(nf) + rho_bar(nf-1))
++    
++    slope_rho(ns:nf) = half * ( slope_im(ns+1:nf+1) + slope_ip(ns:nf) )
++    rho_left_cv(ns:nf) = rho_left_cv_all(ns:nf)
++    rho_right_cv(ns:nf)= rho_left_cv_all(ns+1:nf+1)
++    
++    slope_rho = slope_rho * dy
++    
++    
++    IF (piecewise == 0 ) THEN
++       a0 = rho_bar
++    ELSEIF (piecewise == 1 ) THEN
++       WHERE ( (rho_bar-rho_left_cv) > (rho_bar-rho_right_cv) )
++          a0=rho_left_cv; a1=two*(rho_bar-rho_left_cv)
++       ELSEWHERE
++          a0=two*rho_bar-rho_right_cv; a1=two*(rho_right_cv-rho_bar) 
++       END WHERE
++    ELSEIF (piecewise == 2 ) THEN
++       a0 = rho_left_cv 
++       a1 = -four*rho_left_cv - two*rho_right_cv + six*rho_bar   
++       a2 =  three*rho_left_cv + three*rho_right_cv - six*rho_bar
++    ELSEIF (piecewise == 3 ) THEN
++       a0 = rho_left_cv 
++       a1 = -six*rho_left_cv + six*rho_bar   - two*slope_rho
++       a2 =  nine*rho_left_cv - three*rho_right_cv - six*rho_bar + six*slope_rho
++       a3 = -four*rho_left_cv + four*rho_right_cv - four*slope_rho
++    ENDIF
++  END SUBROUTINE CUBIC_PARAMETERS
+ 
+-    real(kind=real_kind), dimension(nlev) :: dp,dp_star,Ustar,Vstar
+-    real(kind=real_kind), dimension(nlev) :: Uold,Vold,Unew,Vnew
+-    real(kind=real_kind), dimension(nlevp):: z1cU,z2cU,z1cV,z2cV
+-    real(kind=real_kind), dimension(nlev+1)    :: rhsU,lower_diagU,diagU,upper_diagU,q_diagU,zgamU, & 
+-                             rhsV,lower_diagV,diagV,upper_diagV,q_diagV,zgamV
+-    real(kind=real_kind), dimension(nlev)    :: hU,rho_barU,za0U,za1U,za2U,zhdpU, & 
+-                             hV,rho_barV,za0V,za1V,za2V,zhdpV
+-    real(kind=real_kind)            :: tmp_calU,zaccintegerbU,zacctopU,zaccbotU, & 
+-                             tmp_calV,zaccintegerbV,zacctopV,zaccbotV
++
++  !----------------------------------------------------------------------------------------
++  ! This routine to modIFy the PARAMETERs of a piecewise cubic to satisfy monotonocity
++  !-----------------------------------------------------------------------------------------
++  SUBROUTINE  CUBIC_MONOTONE(a0,a1,a2,a3,rho_bar,                    &
++       ns, nf, rho_min, rho_max, check_global, piecewise)
+     
+-    integer(kind=int_kind) :: zkrU(nlev+1),zkrV(nlev+1),ie,i,j,k,jl,jk,ilevU,itopU,ibotU,ilevV,itopV,ibotV,jsubz
++    ! Given a set of PARAMETERs {rho_left, rho_right, rho_bar, slope_rho} for
++    ! each peacewise cubic for each CV(i),i=ns:nf
++    ! this routine modIFy these PARAMETERs so that the piecewise cubic is
++    ! monotone by:
++    ! 1- detect which interval i, WHERE these PARAMETERs will be modIFied.
++    !    This is DOne using one of the 3 dIFferent detection filters
++    !    MONO_FILTER(1,2,3)
++    ! 2- Once a CV is detected to be modIFied, the algorithm decide
++    !    whether to reduce PCM to PPM or PLM or PCoM accordingly
++    ! 3- Compute the new piecewise cubic coefficents  {a0,a1,a2,a3} after
++    !    inforcing the monotonic constraint
+     
+-    call t_startf('remap_velocityUV')
+-    do ie=nets,nete
+-      do i =1,nv
+-        do j=1,nv 
+-          do k=1,nlev
+-            dp(k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(i,j,np1)
+-            dp_star(k) = dp(k) + dt*(elem(ie)%derived%eta_dot_dpdn(i,j,k+1) - elem(ie)%derived%eta_dot_dpdn(i,j,k) ) 
+-            Ustar(k) = elem(ie)%state%v(i,j,1,k,np1)*dp(k)
+-            Vstar(k) = elem(ie)%state%v(i,j,2,k,np1)*dp(k)
+-          enddo
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  ns, nf, check_global, piecewise
++    REAL(KIND=real_kind), DIMENSION(ns:nf) :: rho_left, rho_right, rho_bar, slope_rho 
++    REAL(KIND=real_kind) :: rho_min, rho_max  
++    !  locals ------------------------------------------------            
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf) ::  filter_code, filter_code1,peaks                                         
++    REAL(KIND=real_kind), DIMENSION(ns:nf) ::  rho_left_r, rho_right_r, slope_r  &
++         ,  a0_r, a1_r, a2_r, a3_r            &
++         ,  a0, a1, a2, a3       
++    REAL(KIND=real_kind), DIMENSION(ns:nf+1)  ::  rho_left_all
++    REAL(KIND=real_kind), DIMENSION(2,ns:nf) :: peaks_val
++    
++    INTEGER(KIND=Int_kind) :: i, mono_degree, im, ip
++    REAL(KIND=real_kind) :: temp1, temp2
++    
++    ! section 1: detect which CV WHERE the cubic-PARAMETERs are to be modIFied
++    !            IF    filter_code(i)=0 : cubic-PARAMETERs are not modIFied
++    !            ELSE  filter_code(i)=1 : cubic-PARAMETERs are to be modIFied 
++    
++    
++    
++    filter_code1 = 0; filter_code=0
++    rho_left  = a0; rho_right(ns:nf-1)=rho_left(ns+1:nf)
++    rho_right(nf)=a0(nf)+a1(nf)+a2(nf)+a3(nf)
++    slope_rho = a1 + a2 + (three/four)* a3 
++    
++    rho_left_all(ns:nf)= rho_left
++    rho_left_all(nf+1)=rho_right(nf)
++    
++    CALL MONO_FILTER4(rho_left_all, rho_bar, ns, nf,      &
++         rho_min, rho_max, check_global, filter_code1 )
++    
++    
++    rho_left  = rho_left_all(ns:nf)
++    rho_right = rho_left_all(ns+1:nf+1)
++    
++    CALL CUBIC_COEFFS(rho_left, rho_right, rho_bar, slope_rho, &
++         ns, nf, a0, a1, a2, a3, piecewise)
++    CALL PROPERTIES_CUBIC(a0, a1, a2, a3, piecewise, ns, nf,  &
++         peaks, peaks_val)
++    
++    CALL MONO_FILTER2(rho_left_all, ns, nf, peaks, peaks_val,   & 
++         rho_min, rho_max, check_global, filter_code)
++    
++    
++    CALL CUBIC_REDUCED(rho_left, rho_right, rho_bar, slope_rho,  &            
++         2, ns, nf, rho_left_r, rho_right_r, slope_r)
++    
++    CALL CUBIC_COEFFS(rho_left_r, rho_right_r, rho_bar, slope_r,  &
++         ns, nf, a0_r, a1_r, a2_r, a3_r, piecewise)
++    
++    DO i=ns,nf                                                        
++       IF ( filter_code(i) > 0 ) THEN                                                  
++          IF ( abs(a2_r(i)) > zero ) THEN
++             temp1=-a1_r(i)/(two*a2_r(i))  ! temp1= position of MAXima
++          ELSE
++             temp1 = two
++          ENDIF
++          IF ( temp1 <= zero .OR. temp1 >= one ) THEN  ! MAXima is outside [0,1]
++             a0(i)=rho_left(i); a1(i)=-four*rho_left(i)-two*rho_right(i)+six*rho_bar(i)
++             a2(i)=three*rho_left(i)+three*rho_right(i)-six*rho_bar(i); a3(i)=zero
++          ELSE      ! rho_bar is inside [rho_left,rho_right]             
++             CALL QUADRATIC_REDUCE2(a0(i),a1(i),a2(i),   &
++                  rho_left(i),rho_right(i),rho_bar(i))
++             
++             a3(i)=zero                      
++          ENDIF
++       ENDIF    ! END IF ( filter_code(i) > 0 );  
++    ENDDO      ! END  for i=1:n;  
++  END SUBROUTINE CUBIC_MONOTONE
++  !------------------------------------------------------------------------------------  
++  SUBROUTINE MONO_FILTER2(y,  ns, nf, peaks, peaks_val,        & 
++       ymin, ymax, check_global, yf )
++    !  this type of filter check for details of local cubic and neighbouring
++    !  discrete left-values
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) :: i, ns, nf, check_global
++    REAL(KIND=real_kind),    DIMENSION(ns:nf+1):: y
++    REAL(KIND=real_kind),    DIMENSION(ns:nf)  :: dy
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf)  :: peaks, yf
++    REAL(KIND=real_kind), DIMENSION(2,ns:nf)   :: peaks_val
++    REAL(KIND=real_kind) :: ymin, ymax
++    ! locals
++    INTEGER(KIND=Int_kind) :: im1, im2, ip1, ip2 
++    
++    dy(ns:nf) = y(ns+1:nf+1)-y(ns:nf)                          
++    WHERE ( ABS(dy) < tiny ) dy=zero   
++    
++    DO i=ns,nf
++       im1=MAX(ns,i-1) ; im2=MAX(ns,i-2)  
++       ip1=MIN(nf,i+1); ip2=MIN(nf,i+2);                              
++       IF ( ( peaks(i) /= 0 )              .AND.         &
++            ( (dy(im2)*dy(im1) <= tiny) .OR.          &
++            (dy(ip1)*dy(ip2) <= tiny) .OR.          &
++            (dy(im1)*dy(ip1) >= tiny) .OR.          &
++            (dy(im1)*float(peaks(i)) <= tiny)     ) ) THEN                                                
++          yf(i)=1                                                       
++       ENDIF
++       IF ( peaks(i) > 1 ) THEN
++          yf(i)=1
++       ENDIF
++       IF ( (check_global == 1) .AND.      &
++            ( (y(i) >= ymax)     .OR.      &
++            (y(i) <= ymin)      )        ) THEN                                          
++          yf(i) = 2                                                                          
++       ENDIF
++       IF ( (check_global == 1)                .AND.   & 
++            ( (peaks_val(2,i) > ymax-tiny)  .OR.    &
++            (peaks_val(1,i) < ymin+tiny)   )      ) THEN                                          
++          yf(i) = 2                                                                         
++       ENDIF
++    ENDDO
++  END SUBROUTINE MONO_FILTER2
++      
++ !-----------------------------------------------------------------------------------------     
++  SUBROUTINE MONO_FILTER4(yl, ybar, ns, nf, ymin, ymax, check_global, yf)          
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  i, ns, nf, check_global
++    REAL(KIND=real_kind),    DIMENSION(ns:nf+1):: yl        ! left position
++    REAL(KIND=real_kind),    DIMENSION(ns:nf)  :: ybar, dy  ! average values & size of CVs
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf)  :: yf        ! yf=0 (piecewise is already monotone
++    ! yf=1 (piecewise is not monotone
++    REAL(KIND=real_kind) :: ymin, ymax                      ! MIN & MAX values for ybar
++    
++    
++    ! local 
++    INTEGER(KIND=Int_kind) :: im1, im2, im3, ip1
++    REAL(KIND=real_kind) ::  r1, r2
++    
++    
++    dy(ns:nf-1) = ybar(ns+1:nf)-ybar(ns:nf-1); dy(nf)=dy(nf-1)                          
++    WHERE ( ABS(dy) < tiny ) dy=zero
++    
++    DO i=ns,nf
++       im1=MAX(ns,i-1); im2=MAX(ns,i-2); im3=MAX(ns,i-3)
++       ip1=MIN(nf,i+1)
++       
++       IF ( (ybar(i)-yl(i))*(yl(i)-ybar(im1)) >= zero  )  THEN
++          yf(i)=0            
++       ELSEIF (      dy(im2)*(yl(i)-ybar(im1)) > zero     &
++            .AND. dy(im2)*dy(im3)           > zero     &
++            .AND. dy(i)*dy(ip1)             > zero     &
++            .AND. dy(im2)*dy(i)             < zero     ) THEN                                              
++          yf(i)=0
++       ELSE
++          yf(i)=1; yf(im1)=1
++          r1=ABS(yl(i)-ybar(im1)); r2=ABS(yl(i)-ybar(i))                  
++          IF (r1 >= r2 ) THEN
++             yl(i)=ybar(i)
++          ELSE   
++             yl(i)=ybar(im1)
++          ENDIF
++       ENDIF
++    ENDDO
++    IF( check_global == 1) THEN
++       WHERE (yl > ymax) 
++          yl = ymax
++       ELSEWHERE (yl < ymin) 
++          yl = ymin              
++       END WHERE
++    ENDIF
++  END SUBROUTINE MONO_FILTER4
++      
++  !--------------------------------------------------------------------------------      
++  
++  SUBROUTINE CUBIC_COEFFS(rho_left, rho_right, rho_bar, slope_rho, ns, nf, &
++       a0, a1, a2, a3, piecewise)      
++    ! this routine simply computes the 4 cubic coeffients {a0, a1, a2, a3}
++    ! knowing the cubic PARAMETERs {rho_left,rho_right,rho_bar,slope_rho}
++    ! Zerroukat et.al., Q.J.R. Meteorol. Soc., Vol. 128, pp. 2801-2820 (2002).
++    
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  ns, nf,piecewise
++    REAL(KIND=real_kind), DIMENSION(ns:nf)  ::  rho_left, rho_right, slope_rho, rho_bar  &
++         ,  a0, a1, a2, a3
++         
++    IF (piecewise == 0 ) THEN
++       a0 = rho_bar; a1=zero; a2=zero; a3=zero
++    ELSEIF (piecewise == 1 ) THEN
++       WHERE ( (rho_bar-rho_left) > (rho_bar-rho_right) )
++          a0=rho_left; a1=two*(rho_bar-rho_left)
++          a2=zero; a3=zero
++       ELSEWHERE
++          a0=two*rho_bar-rho_right; a1=two*(rho_right-rho_bar)
++          a2=zero; a3=zero
++       END WHERE
++    ELSEIF (piecewise == 2 ) THEN
++       a0 = rho_left 
++       a1 = -four*rho_left - two*rho_right + six*rho_bar   
++       a2 =  three*rho_left + three*rho_right - six*rho_bar
++       a3 = zero
++    ELSEIF (piecewise == 3 ) THEN
++       a0 = rho_left 
++       a1 = -six*rho_left + six*rho_bar   - two*slope_rho
++       a2 =  nine*rho_left - three*rho_right - six*rho_bar + six*slope_rho
++       a3 = -four*rho_left + four*rho_right - four*slope_rho
++    ENDIF
++  END SUBROUTINE CUBIC_COEFFS
++  !---------------------------------------------------------------------------------
++  SUBROUTINE CUBIC_REDUCED(rho_left, rho_right, rho_bar, slope_rho,          &     
++       piecewise, ns, nf, rho_left_r, rho_right_r, slope_r) 
++    
++    ! Given (rho_left, rho_right, slope_rho) of a full piecewise cubic
++    ! this routine RETURNs the modIFied/reduced (rho_left_r, rho_right_r,slope_rho_r) 
++    ! IF the cubic is reduced to 
++    ! parabola (when  piecewise == 2)
++    ! Linear   (      piecewise == 1)
++    ! constand (      piecewise == 0)
++    INTEGER(KIND=Int_kind) ::  ns, nf, piecewise
++    REAL(KIND=real_kind), DIMENSION(ns:nf)  ::  rho_left, rho_right, rho_bar, slope_rho   &
++         ,  rho_left_r, rho_right_r, slope_r
++    
++    IF (piecewise == 2) THEN 
++       rho_left_r=rho_left
++       rho_right_r=rho_right
++       slope_r=rho_right-rho_left 
++    ELSEIF (piecewise == 1) THEN
++       slope_r(ns+1:nf-1)=half*(rho_bar(ns:nf-2)-rho_bar(ns+2:nf))
++       slope_r(ns)=rho_bar(ns+1)-rho_bar(ns)
++       slope_r(nf)=rho_bar(nf)-rho_bar(nf-1)
++       rho_left_r  =rho_bar-half*slope_r
++       rho_right_r =rho_bar+half*slope_r 
++    ELSEIF (piecewise == 0) THEN
++       rho_left_r = rho_bar
++       rho_right_r =rho_bar
++       slope_r=zero     
++    ENDIF  
++  END SUBROUTINE CUBIC_REDUCED
++!----------------------------------------------------------------------------
++  SUBROUTINE PROPERTIES_CUBIC(a0, a1, a2, a3, piecewise,    &
++       ns, nf, peaks, peaks_val  )
++    
++    ! subroutine to RETURN properties of a cubic f(x):
++    ! f(x) = a0 + a1 * x + a2 * x^2 + a3 * x^3. 
++    ! df/dx = a1 + 2 a2 x + 3 a3 x^2 = a x^2 + b x + c 
++    ! d2f/dx2 = 2 a x + b   
++    
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  i, ns, nf, piecewise
++    REAL(KIND=real_kind), DIMENSION(ns:nf)  ::  rho_left, rho_right, slope_rho  &
++         ,  a0, a1, a2, a3
++    REAL(KIND=real_kind), DIMENSION(2, ns:nf)  :: peaks_val
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf)  :: peaks
++    ! locals 
++    REAL(KIND=real_kind)    :: xm1, xm2, f_xm1, f_xm2, a, b, c, delta, ddf_xm1,ddf_xm2 
++    
++    peaks=0 
++    peaks_val(1,ns:nf)=MIN(a0,a0+a1+a2+a3)
++    peaks_val(2,ns:nf)=MAX(a0,a0+a1+a2+a3)  
++    
++    SELECT CASE(piecewise)
++    CASE (:1)  ! piecewise constant or linear
++       peaks=0;  
++    CASE (2)   ! piecewise parabolic
++       
++       DO i=ns,nf
+           
+-
+-          z1cU(1)=0
+-          z2cU(1)=0
+-          z1cV(1)=0
+-          z2cV(1)=0
+-          do k=1,nlev
+-            Uold(k) = Ustar(k)
+-            z1cU(k+1) = z1cU(k)+dp(k)
+-            z2cU(k+1) = z2cU(k)+dp_star(k)
+-            Vold(k) = Vstar(k)
+-            z1cV(k+1) = z1cV(k)+dp(k)
+-            z2cV(k+1) = z2cV(k)+dp_star(k)
+-          enddo
+-		  
+-          if (ABS(z2cU(nlev+1)-z1cU(nlev+1)).GE.0.000001) then
+-             write(6,*) 'SURFACE PRESSURE IMPLIED BY ADVECTION SCHEME'
+-             write(6,*) 'NOT CORRESPONDING TO SURFACE PRESSURE IN    '
+-             write(6,*) 'DATA FOR MODEL LEVELS'
+-             write(6,*) 'PLEVMODEL=',z2cU(nlev+1)
+-             write(6,*) 'PLEV     =',z1cU(nlev+1)
+-             write(6,*) 'DIFF     =',z2cU(nlev+1)-z1cU(nlev+1)
+-             ! call ABORT
+-          endif
++          xm1=-a1(i)/(two*a2(i))
++          f_xm1=a0(i) + a1(i)*xm1 + a2(i)*xm1**two
+           
+-          if (ABS(z2cV(nlev+1)-z1cV(nlev+1)).GE.0.000001) then
+-             write(6,*) 'SURFACE PRESSURE IMPLIED BY ADVECTION SCHEME'
+-             write(6,*) 'NOT CORRESPONDING TO SURFACE PRESSURE IN    '
+-             write(6,*) 'DATA FOR MODEL LEVELS'
+-             write(6,*) 'PLEVMODEL=',z2cV(nlev+1)
+-             write(6,*) 'PLEV     =',z1cV(nlev+1)
+-             write(6,*) 'DIFF     =',z2cV(nlev+1)-z1cV(nlev+1)
+-             ! call ABORT
+-          endif
++          IF (xm1 <= zero.OR. xm1 >= one) THEN
++             peaks(i)=0
++          ELSE 
++             IF (a2(i) > zero) THEN         ! d2f/dx2 > 0 = MINima
++                peaks(i)=-1;  peaks_val(1,i)= f_xm1
++             ELSE        ! d2f/dx2 < 0 = MAXima
++                peaks(i)=+1; peaks_val(2,i)= f_xm1
++             ENDIF
++          ENDIF
+           
+-          
+-          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-          !!  calculate quadratic splies !!
+-          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-          
+-          zkrU  = 99
+-          ilevU = 2
+-          zkrU(1)       = 1
+-          zgamU(1)      = 0.0
+-          zkrU(nlev+1)  = nlev
+-          zgamU(nlev+1) = 1.0
+-          zhdpU(1) = z1cU(2)-z1cU(1)
+-          
+-          zkrV  = 99
+-          ilevV = 2
+-          zkrV(1)       = 1
+-          zgamV(1)      = 0.0
+-          zkrV(nlev+1)  = nlev
+-          zgamV(nlev+1) = 1.0
+-          zhdpV(1) = z1cV(2)-z1cV(1)
+-          do jl = 2,nlev
+-            zhdpU(jl) = z1cU(jl+1)-z1cU(jl)
+-            jkloopU: do jk = ilevU,nlev+1
+-              if (z1cU(jk).ge.z2cU(jl)) then
+-                ilevU      = jk
+-                zkrU(jl)   = jk-1
+-                zgamU(jl)   = (z2cU(jl)-z1cU(jk-1))/(z1cU(jk)-z1cU(jk-1))
+-                exit jkloopU
+-              endif
+-            enddo jkloopU
+-            zhdpV(jl) = z1cV(jl+1)-z1cV(jl)
+-            jkloopV: do jk = ilevV,nlev+1
+-              if (z1cV(jk).ge.z2cV(jl)) then
+-                ilevV      = jk
+-                zkrV(jl)   = jk-1
+-                zgamV(jl)   = (z2cV(jl)-z1cV(jk-1))/(z1cV(jk)-z1cV(jk-1))
+-                exit jkloopV
+-              endif
+-            enddo jkloopV
+-          enddo 
++       ENDDO
++    CASE (3) ! piecewise cubic
++       DO i=ns,nf        
++          a=three*a3(i); b=two*a2(i); c=a1(i); delta= b**two-four*a*c
++          IF (delta <= 0) THEN
++             peaks(i)=0
++          ELSE         
++             xm1 = (-b-sqrt(delta)) / (two*a)     ! location of extrema 1
++             xm2 = (-b+sqrt(delta)) / (two*a)     ! location of extrema 2
++             f_xm1 = a0(i) + a1(i)*xm1 + a2(i)*xm1**two + a3(i)*xm1**three
++             f_xm2 = a0(i) + a1(i)*xm2 + a2(i)*xm2**two + a3(i)*xm2**three
++             ddf_xm1 = two*a*xm1 + b              ! value of second derivative @ extrema 1
++             ddf_xm2 = two*a*xm2 + b              ! value of second derivative @ extrema 2
++             IF ((xm1 <= zero.OR. xm1 >= one) .AND.    &
++                  (xm2 <= zero.OR. xm2 >= one)          ) THEN ! both outside intervals
++                peaks(i)=0 
++             ELSEIF (xm1 > zero.AND. xm1 < one .AND.  &
++                  xm2 > zero.AND. xm2 < one        )      THEN  ! both inside
++                peaks(i)=2 
++                peaks_val(1,i)=MIN(f_xm1, f_xm2)
++                peaks_val(2,i)=MAX(f_xm1, f_xm2) 
++             ELSEIF ((xm1 > zero) .AND. (xm1 < one)) THEN   ! only xm1 inside                                         
++                IF (ddf_xm1 > zero) THEN                     ! xm1 is a MINima 
++                   peaks(i)=-1; peaks_val(1,i)= f_xm1                                        
++                ELSE                                    ! xm1 is a MAXima 
++                   peaks(i)=+1; peaks_val(2,i)= f_xm1
++                ENDIF
++             ELSEIF (xm2 > zero.AND. xm2 < one ) THEN   ! only xm2 inside                                            
++                IF (ddf_xm2 > zero) THEN                     ! xm2 is a MINima 
++                   peaks(i)=-1 ; peaks_val(1,i)= f_xm2                                        
++                ELSE                                     ! xm2 is a MAXima
++                   peaks(i)=+1 ; peaks_val(2,i)= f_xm2
++                ENDIF
++             ENDIF
++          ENDIF  ! IF delta > 0;                   
++       ENDDO    ! END DO i=one..
++    END SELECT
++  END SUBROUTINE PROPERTIES_CUBIC
+ 
+-          hU = 1/zhdpU ; rho_barU = Uold * hU          
+-          rhsU = 0; lower_diagU = 0; diagU = 0; upper_diagU = 0
+-          
+-          hV = 1/zhdpV ; rho_barV = Vold * hV          
+-          rhsV = 0; lower_diagV = 0; diagV = 0; upper_diagV = 0
+ 
+-          rhsU(1)=3*rho_barU(1);
+-          rhsU(2:nlev) = 3*(rho_barU(2:nlev)*hU(2:nlev) + rho_barU(1:nlev-1)*hU(1:nlev-1)) 
+-          rhsU(nlev+1)=3*rho_barU(nlev);
+-          
+-          rhsV(1)=3*rho_barV(1);
+-          rhsV(2:nlev) = 3*(rho_barV(2:nlev)*hV(2:nlev) + rho_barV(1:nlev-1)*hV(1:nlev-1)) 
+-          rhsV(nlev+1)=3*rho_barV(nlev);
++  !===================================================================================================
++!  SUBROUTINE QUADRATIC_SPLINE(dx,m,rho_left,rho_right,a0,a1,a2,n,boundary_condition)
++  SUBROUTINE QUADRATIC_SPLINE(dx,m,a0,a1,a2,n)
++    !
++    ! this routine computes the coefficents (a0,a1,a2) & nodes-values (rho_left, rho_right)
++    ! of a piecewise quadratic-spline  (similar to PPM)
++    ! dx = mesh size of CV (1-DIMENSIONal)
++    ! m = mass of CVs
++    !     
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) :: n
++    REAL(KIND=real_kind), DIMENSION(n) :: dx,m,rho_left,rho_right,a0,a1,a2
++    ! locals
++    REAL(KIND=real_kind), DIMENSION(n+1) :: rho_left_all
++    REAL(KIND=real_kind), DIMENSION(n)   :: h, rho_bar
++    REAL(KIND=real_kind), DIMENSION(n+1) :: rhs,lower_diag,diag,upper_diag
++    INTEGER(KIND=Int_kind) :: i, boundary_condition
++    REAL(KIND=real_kind) :: upper_corner,lower_corner 
++    
++    ! boundary_condition = 1  ! natural spline (f'=0) for non-cyclic boundaries
++    ! boundary_condition = 2  ! cyclic boundary condition
++    
++    h = one/dx ; rho_bar = m * h          
++    rhs = zero; lower_diag = zero; diag = zero; upper_diag = zero
++    
++    rhs(2:n) = three*(rho_bar(2:n)*h(2:n) + rho_bar(1:n-1)*h(1:n-1)) 
++    lower_diag(2:n) = h(1:n-1)
++    diag(2:n) = two*(h(2:n) + h(1:n-1))
++    upper_diag(2:n) = h(2:n)
+ 
+-          lower_diagU(1)=1;
+-          lower_diagU(2:nlev) = hU(1:nlev-1)
+-          lower_diagU(nlev+1)=1;
+-          
+-          lower_diagV(1)=1;
+-          lower_diagV(2:nlev) = hV(1:nlev-1)
+-          lower_diagV(nlev+1)=1;
++    boundary_condition = 1 !ADD PHL
++    IF ( boundary_condition == 1 ) THEN      
++       rhs(1)=three*rho_bar(1); lower_diag(1)=one; diag(1)=two; upper_diag(1)=one
++       rhs(n+1)=three*rho_bar(n); lower_diag(n+1)=one; diag(n+1)=two; upper_diag(n+1)=one
++!PHL       CALL TRIDIAG_SYSTEM(lower_diag,diag,upper_diag,rhs,rho_left_all,n+1)
++       CALL tridiag(lower_diag,diag,upper_diag,rhs,n+1) !ADD PHL
++       rho_left_all = rhs                               !ADD PHL
++    ELSEIF ( boundary_condition == 2 ) THEN 
++       rhs(1) = three*(rho_bar(1)*h(1) + rho_bar(n)*h(n)) 
++       lower_diag(1)= h(n); diag(1) = two*(h(1)+h(n)); upper_diag(1)=h(1)             
++       upper_corner = h(n); lower_corner = h(n)              
++!PHL       CALL TRIDIAG_CYCLIC_SYSTEM_V2(lower_diag(1:n),diag(1:n),upper_diag(1:n), &
++!PHL            rhs(1:n),rho_left_all(1:n),n               )
++       CALL tridiag_per(lower_diag(1:n),diag(1:n),upper_diag(1:n),rhs(1:n),n) !ADD PHL
++       rho_left_all(1:n) = rhs                                                !ADD PHL
++       rho_left_all(n+1) = rho_left_all(1)
++    ENDIF
++    rho_left(1:n)= rho_left_all(1:n); rho_right(1:n)= rho_left_all(2:n+1)
++    
++    a0 = rho_left
++    a1 = -four* rho_left - two* rho_right + six*rho_bar
++    a2 = +three* rho_left + three* rho_right - six*rho_bar         
++  END SUBROUTINE QUADRATIC_SPLINE
++  
++  
++  !-----------------------------------------------------------------------------------------
++  SUBROUTINE  QUADRATIC_SPLINE_MONOTONE(a0,a1,a2,rho_bar,dx,        &
++       ns, nf, rho_min, rho_max, check_global)
++    !PHL       ns, nf, rho_min, rho_max, check_global, piecewise)
++    !-----------------------------------------------------------------------------------
++    ! Given a set of PARAMETERs {a0,a1,a2,a3,a4} for each peacewise quartic 
++    ! for each CV(i),i=ns:nf, this routine modIFy these PARAMETERs so that the piecewise
++    ! is monotone.            
++    !-----------------------------------------------------------------------------------
++    
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  ns, nf, check_global, piecewise, mz_debug,  &
++        filter_option
++    
++    REAL(KIND=real_kind), DIMENSION(ns:nf) :: a0,a1,a2,rho_bar,dx
++    REAL(KIND=real_kind) :: rho_min, rho_max  
++    !  locals ------------------------------------------------ 
++    REAL(KIND=real_kind), DIMENSION(ns:nf) :: rho_left, rho_right           
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf) ::  filter_code,peaks 
++    REAL(KIND=real_kind), DIMENSION(ns:nf+1)  ::  rho_left_all
++    REAL(KIND=real_kind), DIMENSION(2,ns:nf)  ::  peaks_val
++    
++    INTEGER(KIND=Int_kind) :: i, mono_degree
++    REAL(KIND=real_kind)    :: temp,alfa,pi
++    
++    !----------------------------------------------------------------------------------
++    ! section 1: detect which CV WHERE the quadratic spline is to be modIFied
++    !            IF    filter_code(i)=0 : piecewise-PARAMETERs are not modIFied
++    !            ELSE  filter_code(i)=1 : piecewise-PARAMETERs are to be modIFied 
++    !----------------------------------------------------------------------------------
++    
++    pi=acos(-one)                       
++    filter_code = 0
++    rho_left_all(ns:nf)= a0
++    rho_left_all(nf+1) = a0(nf)+a1(nf)+a2(nf)
++    
++    CALL MONO_FILTER4(rho_left_all, rho_bar, ns, nf,  &
++         rho_min, rho_max, check_global, filter_code  )
++    
++    rho_left  = rho_left_all(ns:nf)
++    rho_right = rho_left_all(ns+1:nf+1)
++    
++    CALL QUADRATIC_SPLINE_COEFFS(rho_left,rho_right,rho_bar,a0,a1,a2,ns,nf)
++    
++    CALL PROPERTIES_QUADRATIC_SPLINE(a0,a1,a2,peaks,peaks_val,ns,nf)
++    CALL MONO_FILTER2(rho_left_all, ns, nf, peaks, peaks_val,        &
++         rho_min, rho_max, check_global, filter_code )
++    
++    
++    !----------------------------------------------------------------------------------             
++    ! section 2:   For those CVs WHERE the PARAMETERs are to be modIFied decide wether 
++    !              it will be reduced to piecewise linear or constant accordingly
++    !----------------------------------------------------------------------------------
++    
++    
++    DO i=ns,nf                                                          
++       IF (filter_code(i) > 0) THEN
++          CALL QUADRATIC_REDUCE2(a0(i),a1(i),a2(i),  &
++               rho_left(i),rho_right(i),rho_bar(i)  )
++       ENDIF
++    ENDDO
++  END SUBROUTINE QUADRATIC_SPLINE_MONOTONE
+ 
+-          diagU(1)=2;
+-          diagU(2:nlev) = 2*(hU(2:nlev) + hU(1:nlev-1))
+-          diagU(nlev+1)=2;
+-          
+-          diagV(1)=2;
+-          diagV(2:nlev) = 2*(hV(2:nlev) + hV(1:nlev-1))
+-          diagV(nlev+1)=2;
++!--------------------------------------------------------------------------------------
++  SUBROUTINE QUADRATIC_SPLINE_COEFFS(rho_left,rho_right,rho_bar,a0,a1,a2,ns,nf) 
++    !-----------------------------------------------------------------------------     
++    ! this routine simply computes the 3 quadratic spline coeffients {a0, a1, a2}
++    ! knowing the quadratic spline parameters {rho_left,rho_right,rho_bar}
++    ! Zerroukat et.al., Q.J.R. Meteorol. Soc., Vol. 128, pp. 2801-2820 (2002).
++    !----------------------------------------------------------------------------- 
++    
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  ns, nf
++    REAL(KIND=real_kind), DIMENSION(ns:nf) :: rho_left,rho_right,rho_bar,a0,a1,a2 
++    
++    a0 = rho_left 
++    a1 = -four*rho_left - two*rho_right + six*rho_bar  
++    a2 =  three*rho_left + three*rho_right - six*rho_bar 
++  END SUBROUTINE QUADRATIC_SPLINE_COEFFS
+ 
+-          upper_diagU(1)=1
+-          upper_diagU(2:nlev) = hU(2:nlev)
+-          upper_diagU(nlev+1)=0
+-          
+-          upper_diagV(1)=1
+-          upper_diagV(2:nlev) = hV(2:nlev)
+-          upper_diagV(nlev+1)=0
++!---------------------------------------------------------------------------------
++  SUBROUTINE QUADRATIC_REDUCE2(a0,a1,a2,rho_left,rho_right,rho_bar)            
++    REAL(KIND=real_kind) ::  a0,a1,a2,rho_left,rho_right,rho_bar
++    !locals
++    REAL(KIND=real_kind) :: level1, level2, level3, level4, level5
++    
++    level1 = rho_left
++    level2 = two*third*rho_left+third*rho_right
++    level3 = half*rho_left+half*rho_right 
++    level4 = third*rho_left+two*third*rho_right
++    level5 = rho_right
++    
++    IF (rho_right >= rho_left ) THEN 
++       IF ( rho_bar <= level1 .OR. rho_bar >= level5) THEN       !out range => constant
++          a0 = rho_bar ; a1 = zero; a2=zero                                           
++       ELSEIF( rho_bar > level1 .AND. rho_bar < level2 ) THEN    !parabola zero slope left         
++          a0=rho_left; a1=zero; a2=three*(rho_bar-rho_left)
++       ELSEIF (  rho_bar >  level4 .AND. rho_bar < level5 ) THEN !parabola zero slope right
++          a0=-two*rho_right+three*rho_bar 
++          a1=+six*rho_right-six*rho_bar
++          a2=-three*rho_right+three*rho_bar                                           
++       ENDIF
++    ELSE                                           
++       IF ( rho_bar >= level1 .OR. rho_bar <= level5) THEN       !out range => constant
++          a0 = rho_bar ; a1 = zero; a2=zero                                           
++       ELSEIF( rho_bar < level1 .AND. rho_bar > level2 ) THEN    !parabola zero slope left         
++          a0=rho_left; a1=zero; a2=three*(rho_bar-rho_left)
++       ELSEIF (  rho_bar <  level4 .AND. rho_bar > level5 ) THEN !parabola zero slope right
++          a0=-two*rho_right+three*rho_bar 
++          a1=+six*rho_right-six*rho_bar
++          a2=-three*rho_right+three*rho_bar                                           
++       ENDIF
++    ENDIF
++  END SUBROUTINE QUADRATIC_REDUCE2
++  
++  !----------------------------------------------------------------------------
++  SUBROUTINE PROPERTIES_QUADRATIC_SPLINE(a0,a1,a2,peaks,peaks_val,ns,nf)
++    ! subroutine to RETURN properties (peaks,peaks_val) of function f(x)
++    ! f(x) = a0 + a1 * x + a2 * x^2
++    
++    IMPLICIT NONE
++    INTEGER(KIND=Int_kind) ::  i, ns, nf
++    REAL(KIND=real_kind), DIMENSION(ns:nf)     :: a0, a1, a2
++    REAL(KIND=real_kind), DIMENSION(2, ns:nf)  :: peaks_val  
++    INTEGER(KIND=Int_kind), DIMENSION(ns:nf)  :: peaks   
++    ! locals 
++    REAL(KIND=real_kind)    :: xm, f_xm
++    
++    ! peaks = 0 IF f has no value > or < than the values of the boudaries
++    ! peaks = 1 IF f has MAXima (concave curve)
++    ! peaks =-1 IF f has MINima (convex curve)
++    ! peaks_val(1,:) MINimum value of f within the interval [0,1]
++    ! peaks_val(2,:) MAXimum value of f within the interval [0,1]
++    
++    peaks=0 
++    peaks_val(1,ns:nf)=MIN(a0,a0+a1+a2)
++    peaks_val(2,ns:nf)=MAX(a0,a0+a1+a2)  
++    
++    DO i=ns,nf
++       IF ( ABS(a2(i)) > tiny ) THEN
++          xm   = -a1(i)/(two*a2(i))            
++          f_xm = a0(i) + a1(i)*xm + a2(i)*xm**two
++          IF ( xm <= zero .OR. xm >= one ) THEN
++             peaks(i)=0 
++          ELSEIF (a2(i) > zero) THEN         ! d2f/dx2 > 0 = MINima
++             peaks(i)=-1; peaks_val(1,i)= f_xm
++          ELSEIF (a2(i) < zero) THEN         ! d2f/dx2 < 0 = MAXima
++             peaks(i)=+1; peaks_val(2,i)= f_xm
++          ENDIF
++       ENDIF
++    ENDDO
++  END SUBROUTINE PROPERTIES_QUADRATIC_SPLINE
+ 
+-          q_diagU(1)=-upper_diagU(1)/diagU(1)
+-          rhsU(1)= rhsU(1)/diagU(1)
+-          
+-          q_diagV(1)=-upper_diagV(1)/diagV(1)
+-          rhsV(1)= rhsV(1)/diagV(1)
+-          do jl=2,nlev+1
+-            tmp_calU    =  1/(diagU(jl)+lower_diagU(jl)*q_diagU(jl-1))
+-            q_diagU(jl) = -upper_diagU(jl)*tmp_calU
+-            rhsU(jl) =  (rhsU(jl)-lower_diagU(jl)*rhsU(jl-1))*tmp_calU
+-            
+-            tmp_calV    =  1/(diagV(jl)+lower_diagV(jl)*q_diagV(jl-1))
+-            q_diagV(jl) = -upper_diagV(jl)*tmp_calV
+-            rhsV(jl) =  (rhsV(jl)-lower_diagV(jl)*rhsV(jl-1))*tmp_calV
+-          enddo
+-          do jl=nlev,1,-1
+-            rhsU(jl)=rhsU(jl)+q_diagU(jl)*rhsU(jl+1)
+-            rhsV(jl)=rhsV(jl)+q_diagV(jl)*rhsV(jl+1)
+-          enddo        
++    !
++    !**********************************************
++    !
++    ! Solves a periodic tridiagonal system
++    !
++    !**********************************************
++    !
++    SUBROUTINE tridiag_per(a,b,c,f,jmx)
++      !
++      ! jmx = dimension of all arrays
++      ! a   = sub (lower) diagonal
++      ! b   = center diagonal
++      ! c   = super (upper) diagonal
++      ! f   = right-hand side
++      !
++      IMPLICIT NONE
++      REAL(KIND=real_kind), DIMENSION(jmx), INTENT(IN)   :: a,b,c
++      REAL(KIND=real_kind), DIMENSION(jmx), INTENT(INOUT):: f
++      INTEGER(KIND=int_kind), INTENT(IN)                :: jmx
++      !
++      ! Local workspace
++      !
++      REAL(KIND=real_kind), DIMENSION(jmx)     :: q,s
++      REAL(KIND=real_kind)                     :: p,fmx
++      INTEGER(KIND=int_kind)                  :: j
++      fmx=f(jmx)
++      ! forward elimination
++      q(1)=-c(1)/b(1)
++      f(1)= f(1)/b(1)
++      s(1)=-a(1)/b(1)
++      DO j=2,jmx
++         p    =  one/(b(j)+a(j)*q(j-1))
++         q(j) = -c(j)*p
++         f(j) =  (f(j)-a(j)*f(j-1))*p
++         s(j) = -a(j)*s(j-1)*p
++      ENDDO
++      ! backward pass
++      q(jmx)=zero
++      s(jmx)=one
++      DO j=jmx-1,1,-1
++         s(j) = s(j)+q(j)*s(j+1)
++         q(j) = f(j)+q(j)*q(j+1)
++      ENDDO
++      ! final pass
++      f(jmx) = (fmx-c(jmx)*q(1)-a(jmx)*q(jmx-1))/&
++               (c(jmx)*s(1)+a(jmx)*s(jmx-1)+b(jmx))
++      DO j=1,jmx-1
++         f(j)=f(jmx)*s(j)+q(j)
++      ENDDO
++      RETURN
++    END SUBROUTINE tridiag_per
++    !
++    !**********************************************
++    !
++    ! Solves a tridiagonal system
++    !
++    !**********************************************
++    !
++    SUBROUTINE tridiag(a,b,c,f,jmx)
++      !
++      ! jmx = dimension of all arrays
++      ! a   = sub (lower) diagonal
++      ! b   = center diagonal
++      ! c   = super (upper) diagonal
++      ! f   = right-hand side
++      !
++      IMPLICIT NONE
++      REAL(KIND=real_kind), DIMENSION(jmx), INTENT(IN)   :: a,b
++      REAL(KIND=real_kind), DIMENSION(jmx), INTENT(INOUT):: c
++      REAL(KIND=real_kind), DIMENSION(jmx), INTENT(INOUT):: f
++      INTEGER(KIND=int_kind), INTENT(IN)                :: jmx
++      !
++      ! Local workspace
++      !
++      REAL(KIND=real_kind), DIMENSION(jmx)     :: q,s
++      REAL(KIND=real_kind)                     :: p,fmx
++      INTEGER(KIND=int_kind)                  :: j
++      c(jmx)=zero
++      ! forward elimination
++      q(1)=-c(1)/b(1)
++      f(1)= f(1)/b(1)
++      DO j=2,jmx
++         p    =  one/(b(j)+a(j)*q(j-1))
++         q(j) = -c(j)*p
++         f(j) =  (f(j)-a(j)*f(j-1))*p
++      ENDDO
++      ! backward pass
++      DO j=jmx-1,1,-1
++         f(j)=f(j)+q(j)*f(j+1)
++      ENDDO
++      RETURN
++    END SUBROUTINE tridiag
++end module
+ 
+-          za0U = rhsU(1:nlev)
+-          za1U = -4*rhsU(1:nlev) - 2*rhsU(2:nlev+1) + 6*rho_barU
+-          za2U = +3*rhsU(1:nlev) + 3*rhsU(2:nlev+1) - 6*rho_barU
+-          
+-          za0V = rhsV(1:nlev)
+-          za1V = -4*rhsV(1:nlev) - 2*rhsV(2:nlev+1) + 6*rho_barV
+-          za2V = +3*rhsV(1:nlev) + 3*rhsV(2:nlev+1) - 6*rho_barV
+-          
+-          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-          !! start iteration from top to bottom of atmosphere !! 
+-          !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-                 
+-          zaccintegerbU = 0
+-          itopU = 1
+-          zacctopU = 0.0
+-          
+-          zaccintegerbV = 0
+-          itopV = 1
+-          zacctopV = 0.0
+ 
+ 
+-          do jk = 1,nlev
+-            ibotU = zkrU(jk+1)
+-            if (zgamU(jk+1)>1d0) then
+-               WRITE(*,*) 'r not in [0:1]', zgamU(jk+1)
+-            endif
+-            do jsubz=itopU,ibotU-1,1
+-              zaccintegerbU = zaccintegerbU + Uold(jsubz)
+-            enddo
+-            zaccbotU = zaccintegerbU + (za0U(ibotU)*zgamU(jk+1)+(za1U(ibotU)/2)*(zgamU(jk+1)**2)+(za2U(ibotU)/3)*(zgamU(jk+1)**3))*zhdpU(ibotU)
+-            elem(ie)%derived%vstar(i,j,1,jk) = (zaccbotU-zacctopU)/dp_star(jk)
+-            zacctopU        = zaccbotU
+-            itopU           = ibotU
+-            
+-            ibotV = zkrV(jk+1)
+-            if (zgamV(jk+1)>1d0) then
+-               WRITE(*,*) 'r not in [0:1]', zgamV(jk+1)
+-            endif
+-            do jsubz=itopV,ibotV-1,1
+-              zaccintegerbV = zaccintegerbV + Vold(jsubz)
+-            enddo
+-            zaccbotV = zaccintegerbV + (za0V(ibotV)*zgamV(jk+1)+(za1V(ibotV)/2)*(zgamV(jk+1)**2)+(za2V(ibotV)/3)*(zgamV(jk+1)**3))*zhdpV(ibotV)
+-            elem(ie)%derived%vstar(i,j,2,jk) = (zaccbotV-zacctopV)/dp_star(jk)
+-            zacctopV        = zaccbotV
+-            itopV           = ibotV
+-          enddo
+-        enddo
+-      enddo
+-    enddo
+-    call t_stopf('remap_velocityUV')
+-  end subroutine remap_velocityUV
++
++
++module remap_lauritzen
++use perf_mod, only: t_startf, t_stopf ! _EXTERNAL
++contains
++SUBROUTINE verremap2(plev ,plevmodel, parg,klev,pres , ireconstruct,pres_min,pres_max,check_global)
++
++!  USE pcmpsm_no_pbc
++!  USE constants
++  use kinds, only              : real_kind, int_kind
++  use pcmpsm_no_pbc, only : quadratic_spline,quadratic_spline_monotone,&   ! _EXTERNAL  
++         cubic_parameters,cubic_monotone
++  use parallel_mod, only : abortmp
++  IMPLICIT NONE
+   
++  ! ireconstruct = 0: piecewise cubic method
++  ! ireconstruct = 1: piecewise cubic method with UK Met Office monotonoicity constraints
++  ! ireconstruct = 2: quadratic splines 
++  ! ireconstruct = 3: quadratic splines with UK Met Office monotonoicity constraints
++  !
++  !
++  !
++  INTEGER(KIND=Int_kind), INTENT(IN) :: klev, ireconstruct
++  REAL(KIND=real_kind)& 
++       plevmodel(klev+1),&         !location of pressure levels in terms of ps and
++                                      !and hybrid coefficients
++          plev(klev+1),  &              !location of pressure levels implied by advection scheme
++          parg(klev),    &              !variable to be vertiCALLy remapped
++          pres(klev),    &              !remaped field
++          pres_min,      &
++          pres_max 
++  !
++  ! LOCAL WORKSPACE
++  !
++  INTEGER(KIND=Int_kind) :: jk, ilev, jl, piecewise, check_global,&
++  !
++  !    IN CASE OF SURFACE PRESSURE MISMATCH WHERE MODEL LEVELS ARE .GE. THE
++  !     SURFACE PRESSURE IMPLIED BY TRANSPORT SCHEME JLMS REFERS TO
++  !     THE MINIMUM INDEX FOR WHICH THIS IS THE CASE
++  !
++  jlms       ,&
++  zkr(klev+1),&          ! in which eulerian cell is floor of cell jk located
++  itop, ibot ,&          ! index of cell in which top/bottom wall is located
++  jsubz
++  REAL(KIND=real_kind) :: & 
++        zgam(klev+1)&         ! dimensionless distance from floor of cell to eulerian cell floor
++       ,zdp          &        ! dummy for pressure level thickness
++       ,za0(klev)    &       ! coefficients for parabolaes
++       ,za1(klev)   &
++       ,za2(klev)  & 
++       ,za3(klev)  & 
++       ,zhdp(klev)     &      !pressure level thicknesses
++       ,zaccintegerb    &     !entire cell mass
++       ,zacctop,zaccbot  &    !mass accumulated towards top of cell jk
++       ,zpsmodel,zpscisl  &   !surface pressure for cisl scheme and model
++       ,ztmp, zmasstoadd&
++       ,zeps&
++       !         ,zmass0,zmass1&
++       ,zarg(klev)&
++       ,zmass0,zmass1
++
++  real(kind=real_kind) :: zero=0
++
++  LOGICAL LMS               !LOWER LEVEL PRESSURE MISMATCH
++  IF (ABS(plevMODEL(KLEV+1)-plev(KLEV+1)).GE.0.000001) THEN
++     WRITE(6,*) 'SURFACE PRESSURE IMPLIED BY ADVECTION SCHEME'
++     WRITE(6,*) 'NOT CORRESPONDING TO SURFACE PRESSURE IN    '
++     WRITE(6,*) 'DATA FOR MODEL LEVELS'
++     WRITE(6,*) 'PLEVMODEL=',plevMODEL(KLEV+1)
++     WRITE(6,*) 'PLEV     =',plev     (KLEV+1)
++     WRITE(6,*) 'DIFF     =',plevMODEL(KLEV+1)-plev(KLEV+1)
++!     c         CALL ABORT
++  ENDIF
++!
++!     INITIALIZE BEFORE INTEGRATION
++  pres     = 0.0
++  zpsmodel = plevmodel(klev+1)
++  zpscisl  = plev(klev+1)
+   
++  zkr  = 99
++  ilev = 2
++  jlms = klev+1
++  lms  = .false.
++  !
++  ! upper boundary is known
++  !
++  zkr(1)       = 1
++  zgam(1)      = 0.0
++  zkr(klev+1)  = klev
++  zgam(klev+1) = 1.0
+   
+-  subroutine remap_velocityQ(n0,np1,dt,elem,hvcoord,nets,nete,compute_diagnostics,rkstage)
++!
++!  call t_startf('verremap-loopa')
++  jlloop: DO jl = 2,klev
++     !
++     !  find nearest level jk, where plev(jk).ge.plevmodel(jl)
++     !
++     DO jk = ilev,klev+1
++        IF (plev(jk).ge.plevmodel(jl)) THEN
++           ilev      = jk
++           zkr(jl)   = jk-1
++           !
++           !     dimensionless distance from celling of cell jk in which zplev is located
++           !     cell jk is bounded by plev(jk) and plev(jk+1)
++           !
++           !           ======      ================ plev(1) = zplevmodel(1) ; zgam(1) = 0   ---
++           !                                                                                 | zgam(2)
++           !           cell 1      ---------------- zplevmodel(2)                           ---
++           !                                                                    
++           !           ======      ================ plev(2)                  
++           !           cell 2
++           !           ======      ================ plev(3)                   ---         --- 
++           !                                                                   | zgam(2)   |
++           !                       ---------------- zplevmodel(3)             ---          | zgam(3)
++           !                       ---------------- zplevmodel(4)                         ---
++           !                                                          
++           !           ======      ================ plev(4)           
++           !           cell 3              .
++           !                               .
++           !                               .
++           !           ======      ================ plev(nlev) = zplevmodel(nlev)
++           !
++           !
++           
++           zdp        = plev(jk)-plev(jk-1)
++           zgam(jl)   = (plevmodel(jl)-plev(jk-1))/zdp
++           CYCLE jlloop
++        ENDIF
++     ENDDO
++  ENDDO jlloop
++!  call t_stopf('verremap-loopa')
++  !
++  !     ****************************************************
++  !     actual remapping
++  !     ****************************************************
++  !
++!  call t_startf('verremap-loopb')
++  zmass0=0
++  DO jk=1,klev
++     !     compute levels thicknesses for levels implied by advection scheme
++     zhdp(jk) = plev(jk+1)-plev(jk)
++     zarg(jk) = parg(jk)/zhdp(jk)
++     zmass0  = zmass0+zhdp(jk)*zarg(jk)
++  ENDDO
++  IF (ireconstruct <2) THEN
++     !     calculate pcm-coefficients
++     piecewise    = 3
++     CALL cubic_parameters(plev,parg,zhdp,za0,za1,za2,za3,piecewise,1,klev)
++     IF (ireconstruct==1)&
++          CALL cubic_monotone(za0,za1,za2,za3,zarg, 1,klev,pres_min, pres_max, check_global, piecewise)
++  ELSE IF (ireconstruct<4) THEN
++     za3 = 0
++     CALL quadratic_spline(zhdp,parg,za0,za1,za2,klev)
++     IF (ireconstruct==3) &
++          CALL quadratic_spline_monotone(za0,za1,za2,zarg,zhdp,1,klev,pres_min,pres_max,check_global)
++  ELSE
++     call abortmp("ireconstruct out of range")
++  ENDIF
++!  call t_stopf('verremap-loopb')
++      
++  !-----start iteration from top to bottom of atmosphere------------------------------            
++  zaccintegerb = 0
++  itop = 1
++  zacctop = 0.0
++
++!  call t_startf('verremap-loopc')
++  DO jk = 1,jlms-1
++     ibot = zkr(jk+1)
++     DO jsubz=itop,ibot-1,1
++        zaccintegerb = zaccintegerb + parg(jsubz)
++     ENDDO
++     CALL int_cubic(zero,zgam(jk+1),za0(ibot),za1(ibot),za2(ibot),za3(ibot),ztmp)
++     zaccbot = zaccintegerb + ztmp*zhdp(ibot)
++     pres(jk) = (zaccbot-zacctop)
++     !
++     !	convert to mixing ratio
++     !
++     !     $	            /(plevmodel(jk+1)-plevmodel(jk))
++     !     prepare for next iteration
++     zacctop        = zaccbot
++     itop           = ibot
++  ENDDO
++!  call t_stopf('verremap-loopc')
++
++  RETURN
++
++  !
++  !
++  !	convert to mixing ratio
++  !
++  zmass1 = 0
++  DO jk=1,klev
++     zdp = plevmodel(jk+1)-plevmodel(jk)
++     pres(jk) = pres(jk)/zdp
++     zmass1 = zmass1+pres(jk)*zdp
++  ENDDO
++!  WRITE(*,*) "mass change in verremap2",zmass1-zmass0
++
++END SUBROUTINE verremap2
++
++
++!
++!***********************
++! Intergral of cubic
++!***********************
++!
++SUBROUTINE int_cubic(l,r,za0,za1,za2,za3,mass)
++!  USE constants
++  USE kinds, only : real_kind
++  use parallel_mod, only : abortmp
++  IMPLICIT NONE
++  REAL(KIND=real_kind), INTENT(IN) :: l,r             !left/right bound \in [0,1]
++  REAL(KIND=real_kind), INTENT(IN) :: za0,za1,za2,za3 !coefficients
++  REAL(KIND=real_kind), INTENT(OUT):: mass  !RETURN: INTEGREAL    
++  !
++  ! local workspace
++  !
++  REAL(KIND=real_kind) zr, zl
++  REAL(KIND=real_kind) :: tiny = 1e-12
++  !
++  zr = r
++  zl = l
++  IF (ABS(zl).LT.tiny)     zl = 0
++  IF (ABS(zr).LT.tiny)     zr = 0
++  IF (ABS(zr-1).LT.tiny) zr = 1
++  IF (ABS(zl-1).LT.tiny) zl = 1
+   
+-    use physical_constants, only : cp, cpwater_vapor
+-    use control_mod, only        : compute_mean_flux, prescribed_wind
+-	
+-    implicit none
+-    real (kind=real_kind),  intent(in)        :: dt
+-    type (element_t),    intent(inout), target  :: elem(:)
+-    type (hvcoord_t),    intent(in)        :: hvcoord
+-    logical,        intent(in)              :: compute_diagnostics
+-    
+-    integer :: nets,nete,n0,np1,rkstage
+-    logical :: use_mean_flux=.false.
+-    
+-    ! ========================
+-    ! Local Variables
+-    ! ========================
++  IF (zl.LT.0.OR.zl.GT.1.OR.&            !DBG
++       zr.LT.0.OR.zr.GT.1) THEN          !DBG
++     WRITE(*,*) 'r or l not in [0:1]'         !DBG
++     WRITE(*,*) 'r,l=',zr,zl                  !DBG
++     call abortmp(' ')                                     !DBG
++  ENDIF                                       !DBG
++  IF (zl.GT.zr) THEN                          !DBG
++     call abortmp('r<l')                         !DBG
++  ENDIF                                       !DBG
++  IF (ABS(zr - zl) .LT. tiny) THEN
++     mass = 0
++  ELSE
++     mass    =                                            &
++          za0*(zr-zl)+(za1/2)*(zr**2-zl**2)+             &
++          (za2/3)*(zr**3-zl**3)+(za3/4)*(zr**4-zl**4)
++  ENDIF
++  RETURN
++END SUBROUTINE int_cubic
++end module
+ 
+-    real (kind=real_kind), dimension(nlev+1)    :: rhs,lower_diag,diag,upper_diag,q_diag,zgam,z1c,z2c,zv
+-    real (kind=real_kind), dimension(nlev)      :: h,Qcol,dy,za0,za1,za2,zarg,zhdp
+-    real (kind=real_kind)  :: dp_star,dp_np1,f_xm,level1,level2,level3,level4,level5, &
+-								peaks_min,peaks_max,Q_vadv,tmp_cal,xm,xm_d,zv1,zv2, &
+-								zero = 0,one = 1,tiny = 1e-12,qmax = 1d50
+-    
+-    integer(kind=int_kind) :: zkr(nlev+1),filter_code(nlev),peaks,im1,im2,im3,ip1,ip2, & 
+-									lt1,lt2,lt3,t0,t1,t2,t3,t4,tm,tp,ie,i,ilev,j,jk,k,q
+-    
+-    call t_startf('remap_velocityQ')
+ 
+-    if(compute_mean_flux==1 .and. prescribed_wind==0) use_mean_flux=.true.
+-   
+-    do ie=nets,nete
+-      do q=1,qsize
+-        do i=1,nv
+-          do j=1,nv
+-             z1c(1)=0
+-             z2c(1)=0
+-             zv(1)=0
+-             do k=1,nlev
+-                if(use_mean_flux)then
+-                   dp_np1 = (hvcoord%hyai(k+1) - hvcoord%hyai(k))*hvcoord%ps0 + &
+-                        (hvcoord%hybi(k+1) - hvcoord%hybi(k))*elem(ie)%state%ps_v(i,j,np1)
+-#ifdef ZEROVERT                        
+-                   dp_star = dp_np1  ! ignore the vertical motion
+-#else
+-                   dp_star = elem(ie)%derived%dp(i,j,k)-dt*elem(ie)%derived%divdp_proj(i,j,k)
+-#endif        
+-                else
+-                   dp_np1 = (hvcoord%hyai(k+1) - hvcoord%hyai(k))*hvcoord%ps0 + &
+-                        (hvcoord%hybi(k+1) - hvcoord%hybi(k))*elem(ie)%state%ps_v(i,j,np1)
+-#ifdef ZEROVERT                        
+-                   dp_star = dp_np1  ! ignore the vertical motion
+-#else
+-                   dp_star = dp_np1 + dt*(elem(ie)%derived%eta_dot_dpdn(i,j,k+1) & 
+-                        -elem(ie)%derived%eta_dot_dpdn(i,j,k)) 
+-#endif
+-                endif
+-                z1c(k+1) = z1c(k)+dp_star
+-                z2c(k+1) = z2c(k)+dp_np1
+-#ifdef ZEROHORZ			  
+-                Qcol(k)=elem(ie)%state%Qdp(i,j,k,q,n0)
+-#else		
+-                Qcol(k)=(elem(ie)%state%Qdp(i,j,k,q,n0)+&
+-                     (rkstage-1)*elem(ie)%state%Qdp(i,j,k,q,np1))/rkstage
+-#endif			
+-                zv(k+1) = zv(k)+Qcol(k)
+-             enddo
+-             
+-             if (ABS(z2c(nlev+1)-z1c(nlev+1)).GE.0.000001) then
+-                write(6,*) 'SURFACE PRESSURE IMPLIED BY ADVECTION SCHEME'
+-                write(6,*) 'NOT CORRESPONDING TO SURFACE PRESSURE IN    '
+-                write(6,*) 'DATA FOR MODEL LEVELS'
+-                write(6,*) 'PLEVMODEL=',z2c(nlev+1)
+-                write(6,*) 'PLEV     =',z1c(nlev+1)
+-                write(6,*) 'DIFF     =',z2c(nlev+1)-z1c(nlev+1)
+-                ! call ABORT
+-             endif
+-             
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-             !! quadratic splies with UK met office monotonicity constraints  !!
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-             
+-             zkr  = 99
+-             ilev = 2
+-             zkr(1) = 1
+-             zkr(nlev+1) = nlev
+-             kloop: do k = 2,nlev
+-                do jk = ilev,nlev+1
+-                   if (z1c(jk).ge.z2c(k)) then
+-                      ilev      = jk
+-                      zkr(k)   = jk-1
+-                      cycle kloop
+-                   endif
+-                enddo
+-             enddo kloop
+-             
+-             zgam  = (z2c(1:nlev+1)-z1c(zkr)) / (z1c(zkr+1)-z1c(zkr))
+-             zgam(1)      = 0.0
+-             zgam(nlev+1) = 1.0
+-             zhdp = z1c(2:nlev+1)-z1c(1:nlev)
+-             
+-             
+-             h = 1/zhdp ; zarg = Qcol * h          
+-             rhs = 0; lower_diag = 0; diag = 0; upper_diag = 0
+-             
+-             rhs(1)=3*zarg(1);
+-             rhs(2:nlev) = 3*(zarg(2:nlev)*h(2:nlev) + zarg(1:nlev-1)*h(1:nlev-1)) 
+-             rhs(nlev+1)=3*zarg(nlev);
+-             
+-             lower_diag(1)=1;
+-             lower_diag(2:nlev) = h(1:nlev-1)
+-             lower_diag(nlev+1)=1;
+-             
+-             diag(1)=2;
+-             diag(2:nlev) = 2*(h(2:nlev) + h(1:nlev-1))
+-             diag(nlev+1)=2;
+-             
+-             upper_diag(1)=1
+-             upper_diag(2:nlev) = h(2:nlev)
+-             upper_diag(nlev+1)=0
+-             
+-             q_diag(1)=-upper_diag(1)/diag(1)
+-             rhs(1)= rhs(1)/diag(1)
+-             
+-             do k=2,nlev+1
+-                tmp_cal    =  1/(diag(k)+lower_diag(k)*q_diag(k-1))
+-                q_diag(k) = -upper_diag(k)*tmp_cal
+-                rhs(k) =  (rhs(k)-lower_diag(k)*rhs(k-1))*tmp_cal
+-             enddo
+-             do k=nlev,1,-1
+-                rhs(k)=rhs(k)+q_diag(k)*rhs(k+1)
+-             enddo
+-             
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-             !!  monotonicity modifications  !!
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!            
+-             
+-             filter_code = 0
+-             dy(1:nlev-1) = zarg(2:nlev)-zarg(1:nlev-1)
+-             dy(nlev) = dy(nlev-1)                          
+-             
+-             dy = merge(zero, dy, abs(dy) < tiny )
+-             
+-             do k=1,nlev
+-                im1=MAX(1,k-1); im2=MAX(1,k-2); im3=MAX(1,k-3)
+-                ip1=MIN(nlev,k+1)
+-                t1 = merge(1,0,(zarg(k)-rhs(k))*(rhs(k)-zarg(im1)) >= 0)
+-                t2 = merge(1,0,dy(im2)*(rhs(k)-zarg(im1)) > 0 .AND. dy(im2)*dy(im3) > 0 &
+-                     .AND. dy(k)*dy(ip1) > 0 .AND. dy(im2)*dy(k) < 0 )
+-                t3 = merge(1,0,ABS(rhs(k)-zarg(im1)) > ABS(rhs(k)-zarg(k)))	
+-                
+-                filter_code(k) = merge(0,1,t1+t2 > 0) 
+-                rhs(k) = (1-filter_code(k))*rhs(k)+filter_code(k)*(t3*zarg(k)+(1-t3)*zarg(im1))
+-                filter_code(im1) = MAX(filter_code(im1),filter_code(k))
+-             enddo
+-             
+-             rhs = merge(qmax,rhs,rhs > qmax)
+-             rhs = merge(zero,rhs,rhs < zero)
+-             
+-             za0 = rhs(1:nlev) 
+-             za1 = -4*rhs(1:nlev) - 2*rhs(2:nlev+1) + 6*zarg  
+-             za2 =  3*rhs(1:nlev) + 3*rhs(2:nlev+1) - 6*zarg 
+-             
+-             dy(1:nlev) = rhs(2:nlev+1)-rhs(1:nlev)                             
+-             dy = merge(zero, dy, abs(dy) < tiny )
+-             
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!     
+-             !! Compute the 3 quadratic spline coeffients {za0, za1, za2}				   !!
+-             !! knowing the quadratic spline parameters {rho_left,rho_right,zarg}		   !!
+-             !! Zerroukat et.al., Q.J.R. Meteorol. Soc., Vol. 128, pp. 2801-2820 (2002).   !!
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+-             
+-             
+-             h = rhs(2:nlev+1)  
+-             
+-             do k=1,nlev
+-                
+-                xm_d = merge(one,2*za2(k),abs(za2(k)) < tiny)
+-                xm = merge(zero,-za1(k)/xm_d, abs(za2(k)) < tiny)            
+-                f_xm = za0(k) + za1(k)*xm + za2(k)*xm**2
+-                
+-                t1 = merge(1,0,ABS(za2(k)) > tiny)
+-                t2 = merge(1,0,xm <= zero .OR. xm >= 1)
+-                t3 = merge(1,0,za2(k) > zero)
+-                t4 = merge(1,0,za2(k) < zero)
+-                tm = merge(1,0,t1*((1-t2)+t3) .EQ. 2)
+-                tp = merge(1,0,t1*((1-t2)+(1-t3)+t4) .EQ. 3)
+-                
+-                peaks=0
+-                peaks = merge(-1,peaks,tm .EQ. 1)
+-                peaks = merge(+1,peaks,tp .EQ. 1)
+-                peaks_min = merge(f_xm,MIN(za0(k),za0(k)+za1(k)+za2(k)),tm .EQ. 1)
+-                peaks_max = merge(f_xm,MAX(za0(k),za0(k)+za1(k)+za2(k)),tp .EQ. 1)
+-                
+-                im1=MAX(1,k-1) ; im2=MAX(1,k-2)  
+-                ip1=MIN(nlev,k+1); ip2=MIN(nlev,k+2);
+-                
+-                t1 = merge(abs(peaks),0,(dy(im2)*dy(im1) <= tiny) .OR. &
+-                     (dy(ip1)*dy(ip2) <= tiny) .OR. (dy(im1)*dy(ip1) >= tiny) .OR. &
+-                     (dy(im1)*float(peaks) <= tiny))
+-                
+-                filter_code(k) = merge(1,t1+(1-t1)*filter_code(k),(rhs(k) >= qmax) .OR. & 
+-                     (rhs(k) <= zero) .OR. (peaks_max > qmax) .OR. (peaks_min < tiny))
+-                
+-                if (filter_code(k) > 0) then
+-                   
+-                   level1 = rhs(k)
+-                   level2 = (2*rhs(k)+h(k))/3
+-                   level3 = 0.5*(rhs(k)+h(k)) 
+-                   level4 = (1/3d0)*rhs(k)+2*(1/3d0)*h(k)
+-                   level5 = h(k)
+-                   
+-                   t1 = merge(1,0,h(k) >= rhs(k))
+-                   t2 = merge(1,0,zarg(k) <= level1 .OR.  zarg(k) >= level5)
+-                   t3 = merge(1,0,zarg(k) >  level1 .AND. zarg(k) <  level2)
+-                   t4 = merge(1,0,zarg(k) >  level4 .AND. zarg(k) <  level5)
+-                   
+-                   lt1 = t1*t2
+-                   lt2 = t1*(1-t2+t3)
+-                   lt3 = t1*(1-t2+1-t3+t4)
+-                   
+-                   za0(k) = merge(zarg(k),za0(k),lt1 .EQ. 1)
+-                   za1(k) = merge(zero,za1(k),lt1 .EQ. 1)
+-                   za2(k) = merge(zero,za2(k),lt1 .EQ. 1)
+-                   
+-                   za0(k) = merge(rhs(k),za0(k),lt2 .EQ. 2)
+-                   za1(k) = merge(zero,za1(k),lt2 .EQ. 2)
+-                   za2(k) = merge(3*(zarg(k)-rhs(k)),za2(k),lt2 .EQ. 2)
+-                   
+-                   za0(k) = merge(-2*h(k)+3*zarg(k),za0(k),lt3 .EQ. 3)
+-                   za1(k) = merge(+6*h(k)-6*zarg(k),za1(k),lt3 .EQ. 3)
+-                   za2(k) = merge(-3*h(k)+3*zarg(k),za2(k),lt3 .EQ. 3)
+-                   
+-                   t2 = merge(1,0,zarg(k) >= level1 .OR.  zarg(k) <= level5)
+-                   t3 = merge(1,0,zarg(k) <  level1 .AND. zarg(k) >  level2)
+-                   t4 = merge(1,0,zarg(k) <  level4 .AND. zarg(k) >  level5)
+-                   
+-                   lt1 = (1-t1)*t2
+-                   lt2 = (1-t1)*(1-t2+t3)
+-                   lt3 = (1-t1)*(1-t2+1-t3+t4)
+-                   
+-                   za0(k) = merge(zarg(k),za0(k),lt1 .EQ. 1)
+-                   za1(k) = merge(zero,za1(k),lt1 .EQ. 1)
+-                   za2(k) = merge(zero,za2(k),lt1 .EQ. 1)
+-                   
+-                   za0(k) = merge(rhs(k),za0(k),lt2 .EQ. 2)
+-                   za1(k) = merge(zero,za1(k),lt2 .EQ. 2)
+-                   za2(k) = merge(3*(zarg(k)-rhs(k)),za2(k),lt2 .EQ. 2)
+-                   
+-                   za0(k) = merge(-2*h(k)+3*zarg(k),za0(k),lt3 .EQ. 3)
+-                   za1(k) = merge(+6*h(k)-6*zarg(k),za1(k),lt3 .EQ. 3)
+-                   za2(k) = merge(-3*h(k)+3*zarg(k),za2(k),lt3 .EQ. 3)	
+-                endif
+-             enddo
+-             
+-             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-             !! start iteration from top to bottom of atmosphere !! 
+-			 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-             
+-             zv1 = 0
+-             do k=1,nlev
+-				if (zgam(jk+1)>1d0) then
+-					WRITE(*,*) 'r not in [0:1]', zgam(jk+1)
+-				endif
+-                zv2 = zv(zkr(k+1))+(za0(zkr(k+1))*zgam(k+1)+(za1(zkr(k+1))/2)*(zgam(k+1)**2)+ &
+-                     (za2(zkr(k+1))/3)*(zgam(k+1)**3))*zhdp(zkr(k+1))
+-                Q_vadv = (elem(ie)%state%Qdp(i,j,k,q,np1) - (zv2 - zv1)) / dt
+-                elem(ie)%state%Qdp(i,j,k,q,np1) = (zv2 - zv1)	
+-                zv1 = zv2;	
+-#ifdef ENERGY_DIAGNOSTICS
+-                if (compute_diagnostics .and. q==1) then
+-                   elem(ie)%accum%IEvert1_wet(i,j) = elem(ie)%accum%IEvert1_wet(i,j) + (Cpwater_vapor-Cp)*elem(ie)%state%T(i,j,k,n0)*Q_vadv
+-                endif
+-#endif	
+-             enddo
+-          enddo
+-       enddo
+-    enddo
+- enddo
+- 
+- call t_stopf('remap_velocityQ')
+- end subroutine remap_velocityQ
+- 
+- end module vertremap_mod
+ 
+-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+-!! End GPU remap module    !!
+-!! by Rick Archibald, 2010  !!
+-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+ 
+ 
+@@ -736,7 +1226,6 @@
+         dt,tl,nets,nete, compute_diagnostics)
+     use perf_mod, only : t_startf, t_stopf            ! _EXTERNAL
+     use derivative_mod, only : divergence_sphere
+-    use vertremap_mod, only: remap_velocityuv,remap_velocityq  ! _EXTERNAL (actually INTERNAL)
+ 
+     implicit none
+     type (element_t), intent(inout)   :: elem(:)
+@@ -846,7 +1335,7 @@
+ 	    compute_diagnostics,USEvn0,DSSeta,0)
+ 	
+ 	! compute U* = U(t+1) on dp_star levels, store in elem%state%vstar:
+-	call remap_velocityUV(np1,dt,elem,hvcoord,nets,nete)
++	call remap_velocity(np1,dt,elem,hvcoord,hybrid,deriv,nets,nete)
+ 
+ 	! STAGE 2: needs U(t+.5) to second order.  Use average of vn0 and vstar:
+ 	call euler_step(np1,np1,dt/2,elem,hvcoord,hybrid,deriv,nets,nete,&
+@@ -858,14 +1347,66 @@
+       endif
+     endif
+ 
+-    ! to finish the 2D advection step, we need to average the t and t+2 results
+-    ! to get a second order estimate for t+1.  We then apply the vertical
+-    ! remap.  These two steps have been merged into one for efficienty:
+-    call remap_velocityQ(n0,np1,dt,elem,hvcoord,nets,nete,compute_diagnostics,rkstage)	
+ 
+ 
++    do ie=nets,nete
++      ! finish 2D advection step:
++#ifdef ZEROHORZ
++        elem(ie)%state%Qdp(:,:,:,:,np1)=elem(ie)%state%Qdp(:,:,:,:,n0) ! ignore 2D step
++#else
++       !  take average of t and t+2 results:
+ 
++        elem(ie)%state%Qdp(:,:,:,:,np1) = (elem(ie)%state%Qdp(:,:,:,:,n0)+&
++            (rkstage-1)*elem(ie)%state%Qdp(:,:,:,:,np1) )/rkstage
++#endif
+ 
++       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
++       !  VERTICAL and FORCING
++       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
++       ! compute dp_star and dp_np1
++        if(compute_mean_flux==1 .and. prescribed_wind==0)then
++	      ! consistent advection.  dp_star is horizontal advection of dp
++	      do k=1,nlev
++		  dp_np1(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
++		      ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
++		  dp_star(:,:,k) =  elem(ie)%derived%dp(:,:,k)-dt*elem(ie)%derived%divdp_proj(:,:,k)
++	      enddo
++	else
++	      ! otherwise, use mean eta_dot_dpdn from dynamics
++	      ! also must be used if dp() and eta_dot_dpdn() prescribed
++	      do k=1,nlev
++		  dp_np1(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
++		      ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
++		  ! compute dp_star from eta_dot_dpdn(t+.5)
++		  dp_star(:,:,k) = dp_np1(:,:,k) + &
++		      dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -  &
++		      elem(ie)%derived%eta_dot_dpdn(:,:,k) ) 
++	      enddo
++	endif
++
++#ifdef ZEROVERT
++       dp_star=dp_np1  ! ignore the vertical motion
++#endif
++
++       do q=1,qsize
++          ! remap Q.  also return Q_vadv for diagnostics
++          call preq_vertadv_remap(elem(ie)%state%Qdp(:,:,:,q,np1),&
++               dp_star,dp_np1,dt,hvcoord,Q_vadv,.true.)
++#ifdef ENERGY_DIAGNOSTICS
++          if (compute_diagnostics .and. q==1) then
++             ! IEvert1_wet():  (Cpv-Cp) T Qdp_vadv  (Q equation)
++             ! IEhorz1_wet():  (Cpv-Cp) T Qdp_hadv  (Q equation)
++             do k=1,nlev
++                elem(ie)%accum%IEvert1_wet(:,:) = elem(ie)%accum%IEvert1_wet(:,:) +&
++                  (Cpwater_vapor-Cp)*elem(ie)%state%T(:,:,k,n0)*Q_vadv(:,:,k)
++             enddo
++          endif
++#endif
++       enddo
++    enddo
++
++
++
+ #ifndef ZEROHORZ
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     !  Dissipation
+@@ -1183,6 +1724,82 @@
+ !-----------------------------------------------------------------------------
+ !-----------------------------------------------------------------------------
+ 
++  subroutine remap_velocity(nl,dt,elem,hvcoord,hybrid,deriv,nets,nete)
++  ! 
++  ! compute u*(t+1): velocity at t+1 from a Lagrange step 
++  ! store result in elem%derived%vstar
++  !
++  ! NOTE: routine uses elem%derived%eta_dot_dpdn, which is assumed
++  ! already computed and DSS'd
++  !
++  ! Leapfrog: 
++  !    u(t+1) = u(t-1) - 2dt*2Dterms(t) - 2dt*eta_dot_dpdn d/dn U  = 0
++  ! Leapfrog Lagrangian would look like this:
++  !    u*(t+1) = u*(t-1) - 2dt*2Dterms(t) = 0
++  ! Which is satisfied if we take:
++  !    u*(t+1) = u(t+1) + dt eta_dot_dpdn d/dn U
++  !    u*(t-1) = u(t-1) - dt eta_dot_dpdn d/dn U
++  !   
++  ! Two methods to compute this:  
++  ! REMAP:
++  !   Reference surface:  dp 
++  !   Lagrangian surface: dp_star
++  !      dp_star = dp  + dt d/dn[eta_dot_dpdn] 
++  !
++  !   Remap U(nl) given on dp(nl) to Ustar given on dp_star
++  !
++  ! ADVECTION:
++  !   advect U(nl) from dp to dp_star using DSS'd v_vadv(), which
++  !   we recompute from the DSS'd eta_dot_dpdn()                                    
++  !   use dynamics subroutine which computes v_adv() 
++  !   not yet coded.
++  !
++  use kinds, only : real_kind
++  use dimensions_mod, only : nv, np, nlev
++  use hybrid_mod, only : hybrid_t
++  use element_mod, only : element_t
++  use derivative_mod, only : derivative_t, divergence_sphere, gradient_sphere, vorticity_sphere
++  use edge_mod, only : edgevpack, edgevunpack
++  use bndry_mod, only : bndry_exchangev
++  use hybvcoord_mod, only : hvcoord_t
++
++  implicit none
++  integer :: nl,nets,nete
++  real (kind=real_kind), intent(in)  :: dt
++
++  type (hvcoord_t)     , intent(in) :: hvcoord
++  type (hybrid_t)      , intent(in) :: hybrid
++  type (element_t)     , intent(inout), target :: elem(:)
++  type (derivative_t)  , intent(in) :: deriv
++
++  ! local
++  real(kind=real_kind), dimension(nv,nv,nlev) :: work
++  real(kind=real_kind), dimension(nv,nv,nlev) :: dp
++  real(kind=real_kind), dimension(nv,nv,nlev) :: dp_star
++  real(kind=real_kind), dimension(nv,nv,nlev) :: Ustar
++  real(kind=real_kind), dimension(nv,nv,nlev) :: Vstar
++  integer :: ie,i,j,k
++
++
++  do ie=nets,nete
++     ! remap U(nl) from dp to dp_star 
++     do k=1,nlev
++        dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
++             ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,nl)
++        ! compute dp_star from eta_dot_dpdn(t+.5)
++        dp_star(:,:,k) = dp(:,:,k) + &
++             dt*(elem(ie)%derived%eta_dot_dpdn(:,:,k+1) -  &
++             elem(ie)%derived%eta_dot_dpdn(:,:,k) ) 
++     enddo
++     Ustar(:,:,:) = elem(ie)%state%v(:,:,1,:,nl)*dp(:,:,:)
++     Vstar(:,:,:) = elem(ie)%state%v(:,:,2,:,nl)*dp(:,:,:)
++     call preq_vertadv_remap(Ustar,dp,dp_star,dt,hvcoord,work,.false.)
++     call preq_vertadv_remap(Vstar,dp,dp_star,dt,hvcoord,work,.false.)
++     elem(ie)%derived%vstar(:,:,1,:) = Ustar(:,:,:)/dp_star(:,:,:)
++     elem(ie)%derived%vstar(:,:,2,:) = Vstar(:,:,:)/dp_star(:,:,:)
++  enddo
++  end subroutine remap_velocity
++
+ !-----------------------------------------------------------------------------
+ !-----------------------------------------------------------------------------
+ 
+@@ -2028,6 +2645,89 @@
+ 
+ 
+ 
++! compute the vertical advection term for this equation:
++!    d/dt[dp Q] +  div( U dp Q ) + d( eta_dot_dpdn Q ) = 0
++!
++! qsplit=1 case:  
++!   dp(t+1) = dp(t-1) + 2dt d[ eta_dot_dpdn(t) ]
++!  
++!  z1 = grid with intervales of size dp(t-1)    grid at time t-1
++!  Lagrangian advection (mass preserving):  z1 grid unchanged, Q unchanged
++!  z2 = grid with intervales of size dp(t+1)    grid at time t+1
++!
++!  map Q(t-1) on z1 grid to Q(t+1) on z2 grid
++! 
++!  Qtend = [ Q(t+1) dp(t+1) - Q(t-1) dp(t-1) ]  / 2 dt
++!
++!  Note: Q=1 is preserved by remap code.  Thus taking Q=1 will result in
++!  [ dp(t+1) - dp(t-1) ] / 2 dt  = d[eta_dot_dpdn(t) ] which is the same 
++!  term in the Primative Equations mass continutity equation (implicit
++!  in the definition of eta_dot_dpdn)
++!  (wont be exact if qsplit>1)
++!
++  subroutine preq_vertadv_remap(Q,dp1,dp2,dt2,hvcoord,Q_vadv,use_limiter)
++    use remap_lauritzen, only :  verremap2                 ! _EXTERNAL 
++    use perf_mod, only : t_startf, t_stopf                 ! _EXTERNAL
++
++    implicit none
++    real (kind=real_kind), intent(inout)  :: Q(nv,nv,nlev)
++    real (kind=real_kind), intent(out)    :: Q_vadv(nv,nv,nlev)
++    real (kind=real_kind), intent(in)     :: dp1(nv,nv,nlev),dp2(nv,nv,nlev)
++    type (hvcoord_t)                      :: hvcoord
++    logical, intent(in)                   :: use_limiter
++
++    ! ========================
++    ! Local Variables
++    ! ========================
++    integer :: check_global=1
++    real (kind=real_kind)  :: qmin=0
++    real (kind=real_kind)  :: qmax=1d50
++
++    integer                            :: i,j,k,l
++    real (kind=real_kind)  :: dt2
++    real (kind=real_kind)  :: Qold(nlev,nv,nv),Qnew(nlev,nv,nv)
++    real (kind=real_kind)  :: z2c(nlevp,nv,nv),z1c(nlevp,nv,nv)
++    integer :: ipr(nlev),ik,ippm
++
++
++    call t_startf('preq_vertadv_remap')
++    if (use_limiter) then
++       check_global=1
++!       ippm=1   ! about 2x slower
++       ippm=3
++    else
++       check_global=0
++       ippm=2
++    endif
++
++    z1c(1,:,:)=0
++    z2c(1,:,:)=0
++    do k=1,nlev
++       Qold(k,:,:)=Q(:,:,k)
++       z1c(k+1,:,:) = z1c(k,:,:)+dp1(:,:,k)
++       z2c(k+1,:,:) = z2c(k,:,:)+dp2(:,:,k)
++    enddo
++    do i=1,nv
++    do j=1,nv
++
++       ! 0 piecewise cubic
++       ! 1 piecewise cubic with UK met office monotonicity constraints
++       ! 2 quadratic splies
++       ! 3 quadratic splies with UK met office monotonicity constraints
++       call VERREMAP2(z1c(:,i,j),z2c(:,i,j),Qold(:,i,j),nlev,Qnew(:,i,j),&
++           ippm,qmin,qmax,check_global) 
++    enddo
++    enddo
++    do k=1,nlev
++       ! for diagnostics:  Qdp(t-1) - Qdp(t+1) / dt2
++       Q_vadv(:,:,k) = (  Q(:,:,k) - Qnew(k,:,:)   ) / dt2
++       Q(:,:,k) = Qnew(k,:,:)
++    enddo
++    call t_stopf('preq_vertadv_remap')
++end subroutine preq_vertadv_remap
++       
++
++
+   subroutine advance_hypervis_scalar_lf(edgeAdv,elem,hvcoord,hybrid,deriv,nt,n0,nets,nete,dt2)
+   !
+   !  hyperviscosity operator used by leapfrog scheme
+
+Property changes on: prim_advection_mod.F90
+___________________________________________________________________
+Deleted: svn:mergeinfo
+   Reverse-merged /branches/remap-ornl/src/share/prim_advection_mod.F90:r1404-1426
+

@@ -1,0 +1,43 @@
+#
+# blas library Makefile...
+#
+ARCH=$(shell uname -s)
+
+BUILDDIR = .
+
+TARGET = $(BUILDDIR)/libblas.a
+
+SRC =  dasum.f daxpy.f dcopy.f ddot.f  dgemm.f dgemv.f dger.f\
+       dnrm2.f drot.f  drotg.f drotm.f dscal.f dswap.f dtrmm.f dtrmv.f\
+       dsyr2k.f dsyr2.f dsymv.f idamax.f lsame.f xerbla.f\
+       dznrm2.f zscal.f sswap.f sdot.f
+
+OBJS = $(SRC:.f=.o)
+
+.SUFFIXES: .f .o
+
+include ../../Params.inc
+include ../../bld/Makefile.$(ARCH)
+
+%.o:%.f
+	$(F90) $(FFLAGS) $(FIXED) $(OMP_FLAGS) -c $<
+
+all: $(TARGET)
+
+#
+# This method of specifying the library target allows a parallel make 
+# but forces a single execution of the AR command (which will fail in parallel)
+#
+
+$(TARGET) : $(SRC)
+	$(MAKE) $(?:.f=.o)
+	$(AR) $(ARFLAGS) $@ $(?:.f=.o)
+	$(RANLIB) $@
+	$(RM) $(?:.f=.o)
+
+clean:
+	$(RM)  $(OBJS) $(TARGET)
+
+realclean:
+	$(RM) $(OBJS) ; $(RM) $(TARGET)
+

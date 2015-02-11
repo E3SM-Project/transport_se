@@ -1,0 +1,46 @@
+#
+# blas library Makefile...
+#
+ARCH=$(shell uname -s)
+
+include ../../Params.inc
+include ../../bld/Makefile.$(ARCH)
+BUILDDIR = .
+TARGET = $(BUILDDIR)/liblapack.a
+
+SRC = dgebak.f  dgehrd.f  dladiv.f  dlamch.f\
+       dlapy2.f  dlarft.f  dlaset.f  dorgqr.f\
+       dgebal.f  dhseqr.f  dlahqr.f  dlange.f\
+       dlarf.f   dlarfx.f  dlassq.f  dtrevc.f\
+       dgeev.f   dlabad.f  dlahrd.f  dlanhs.f\
+       dlarfb.f  dlartg.f  dorg2r.f  dgehd2.f\
+       dlacpy.f  dlaln2.f  dlanv2.f  dlarfg.f\
+       dlascl.f  dorghr.f  ieeeck.f  ilaenv.f\
+       dsyev.f   dsytrd.f  dlansy.f  dlatrd.f\
+       dsytd2.f  dsterf.f  dorgtr.f  dsteqr.f\
+       dlasrt.f  dlasr.f   dlaev2.f  dorgql.f\
+       dlae2.f   dlanst.f  dorg2l.f  dgetrs.f\
+       dgetrf.f  dgetri.f  dlaswp.f  dgetf2.f\
+       dtrtri.f  dtrti2.f  dgecon.f  dlacon.f\
+       dlatrs.f  drscl.f   dtrsm.f
+ 
+OBJS = $(SRC:.f=.o)
+
+.SUFFIXES: .f .o
+
+%.o:%.f
+	$(F90) $(FFLAGS) $(FIXED) $(OMP_FLAGS) -c $<
+
+all: $(TARGET)
+
+$(TARGET) : $(SRC)
+	$(MAKE) $(?:.f=.o)
+	$(AR) $(ARFLAGS) $@ $(?:.f=.o)
+	$(RANLIB) $@
+	$(RM) $(?:.f=.o)
+clean:
+	$(RM) $(OBJS) $(TARGET)
+
+realclean: clean
+
+

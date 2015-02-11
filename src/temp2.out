@@ -1,0 +1,1352 @@
+Index: share/bndry_mod.F90
+===================================================================
+--- share/bndry_mod.F90	(revision 2082)
++++ share/bndry_mod.F90	(working copy)
+@@ -486,7 +486,7 @@
+     use kinds, only : log_kind
+     use edge_mod, only : Ghostbuffertr_t
+     use schedule_mod, only : schedule_t, cycle_t, schedule
+-    use dimensions_mod, only: nelemd
++    use dimensions_mod, only: nelemd, ntrac
+ #ifdef _MPI
+     use parallel_mod, only : abortmp, status, srequest, rrequest, &
+          mpireal_t, mpiinteger_t, mpi_success
+@@ -503,7 +503,7 @@
+     type (Cycle_t),pointer                        :: pCycle
+     integer                                       :: dest,length,tag
+     integer                                       :: icycle,ierr
+-    integer                                       :: iptr,source,nlyr,ntrac
++    integer                                       :: iptr,source,nlyr
+     integer                                       :: nSendCycles,nRecvCycles
+     integer                                       :: errorcode,errorlen
+     character*(80) errorstring
+@@ -525,8 +525,7 @@
+        pSchedule => Schedule(1)
+ #endif
+        nlyr = buffer%nlyr
+-       ntrac= buffer%ntrac
+-       
++              
+        nSendCycles = pSchedule%nSendCycles
+        nRecvCycles = pSchedule%nRecvCycles
+ 
+Index: share/control_mod.F90
+===================================================================
+--- share/control_mod.F90	(revision 2082)
++++ share/control_mod.F90	(working copy)
+@@ -20,8 +20,8 @@
+ !but (\rho q)/\pho= q is limited. really, would only be used in swirl test case for now
+ !because other test cases have to be reviewed in order to add a const field
+   integer, public  :: kmass  = -1
++  real (kind=real_kind), public ::nu_mc = 0.0
+ 
+-
+   integer, public  :: tstep_type= 0                           ! 0 = leapfrog
+                                                               ! 1 = RK (foward-in-time)
+   integer, public  :: rk_stage_user  = 0                      ! number of RK stages to use  
+Index: share/cslam_analytic_mod.F90
+===================================================================
+--- share/cslam_analytic_mod.F90	(revision 2082)
++++ share/cslam_analytic_mod.F90	(working copy)
+@@ -7,7 +7,7 @@
+ ! This module contains all analytical terms for CSLAM                               ! 
+ !-----------------------------------------------------------------------------------!
+ module cslam_analytic_mod
+-#ifndef MESH
++
+   use kinds, only : real_kind, int_kind
+   use dimensions_mod, only: nc, nhe, ntrac
+   
+@@ -288,6 +288,5 @@
+ end function I_11
+ !END SUBROUTINES I_00, I_01, I_20, I_02, I11----------------------------CE-for CSLAM!
+ 
+-#endif
+ 
+ end module cslam_analytic_mod
+Index: share/cslam_control_volume_mod.F90
+===================================================================
+--- share/cslam_control_volume_mod.F90	(revision 2082)
++++ share/cslam_control_volume_mod.F90	(working copy)
+@@ -86,7 +86,6 @@
+     integer                  :: ibasehaloex(-1:nc+2,2,2)     
+   end type cslam_struct
+ 
+-#ifndef MESH
+   public :: cslam_mesh_ari
+   
+   real (kind=real_kind),parameter, public   :: bignum = 1.0D20
+@@ -119,6 +118,11 @@
+   cslam%cubeboundary=0
+   corner=.FALSE.
+ 
++! Jose Garcia: This code does not work with MESH
++! yet we allow it so MESH and CSLAM can be compiled 
++! in the same executable. Some execution paths that
++! do not call this routine will work fine.
++#ifndef MESH
+   do j=1,8
+     if (elem%vertex%nbrs(j)%used) then
+       cslam%nbrsface(j)=elem%vertex%nbrs(j)%f
+@@ -137,6 +141,8 @@
+       endif
+     end if
+   end do
++#endif
++
+   call create_ari(elem,cslam)
+   call create_interpolation_points(elem,cslam)
+ 
+@@ -861,7 +867,14 @@
+                                                         gnomystart, gnomyend
+   integer                                       :: i, halo, ida, ide, iref1, iref2
+   type (cartesian2D_t)                          :: tmpgnom     
+-  
++
++! Jose Garcia
++! creating an empty routine when MESH is defined.
++! We allow this so both MESH and CSLAM can be compiled together
++! because some executions paths that do not use this routine are 
++! important.
++
++#ifndef MESH  
+   ! element is not on a corner, but shares a cube edge (call of subroutine)
+   if(cslam%cubeboundary <= 4) then
+     gnomxstart(1-nhc)=elem%corners(1)%x-(nhc-0.5)*cslam%dalpha
+@@ -1267,6 +1280,12 @@
+             call abortmp('cslam_reconstruction_mod.F90 subroutine create_interpolationpoint!')
+          end select
+   endif
++
++#endif 
++!  ^
++!  |
++! endif for ifndef MESH
++
+ end subroutine create_interpolation_points
+ !END SUBROUTINE CREATE_INTERPOLATION_POINTS-----------------------------CE-for CSLAM!
+ 
+@@ -1347,6 +1366,5 @@
+   
+ end subroutine interpolation_point
+ !END SUBROUTINE INTERPOLATION_POINT-------------------------------------CE-for CSLAM!
+-#endif
+ 
+ end module cslam_control_volume_mod
+Index: share/cslam_filter_mod.F90
+===================================================================
+--- share/cslam_filter_mod.F90	(revision 2082)
++++ share/cslam_filter_mod.F90	(working copy)
+@@ -9,8 +9,6 @@
+ !-----------------------------------------------------------------------------------!
+ module cslam_filter_mod
+ 
+-#ifndef MESH
+-
+   use kinds, only                  : int_kind, real_kind
+   use dimensions_mod, only         : nc,nhc,nhe
+   use coordinate_systems_mod, only : cartesian2D_t,cartesian3D_t
+@@ -723,6 +721,4 @@
+ end subroutine slopelimiter_val
+ !END SUBROUTINE SLOPELIMITER_VAL----------------------------------------CE-for CSLAM!
+ 
+-#endif
+-
+ end module cslam_filter_mod
+Index: share/cslam_line_integrals_mod.F90
+===================================================================
+--- share/cslam_line_integrals_mod.F90	(revision 2082)
++++ share/cslam_line_integrals_mod.F90	(working copy)
+@@ -11,7 +11,6 @@
+ !                                                                                   !
+ !-----------------------------------------------------------------------------------!
+ module cslam_line_integrals_mod
+-#ifndef MESH
+ 
+   use kinds, only               : int_kind, real_kind
+   use dimensions_mod, only      : nc, nhe, ngpc
+@@ -2067,6 +2066,5 @@
+     ENDIF
+   end function
+ 
+-#endif
+ 
+ end module cslam_line_integrals_mod
+Index: share/cslam_mod.F90
+===================================================================
+--- share/cslam_mod.F90	(revision 2082)
++++ share/cslam_mod.F90	(working copy)
+@@ -13,14 +13,12 @@
+ 
+ module cslam_mod
+ 
+-#ifndef MESH
+-
+   use kinds, only : real_kind, int_kind, longdouble_kind
+   use edge_mod, only : ghostbuffertr_t, initghostbuffer, freeghostbuffertr, &
+                        ghostVpack, ghostVunpack,  edgebuffer_t, initEdgebuffer
+   use dimensions_mod, only: nelem, nelemd, nelemdmax, nlev, ne, nc, nhc, nhe, nlev, ntrac, np, ntrac_d
+   use time_mod, only : timelevel_t
+-  use element_mod, only : element_t
++  use element_mod, only : element_t, timelevels
+   use cslam_control_volume_mod, only: cslam_struct
+   use hybrid_mod, only : hybrid_t
+ 
+@@ -30,7 +28,7 @@
+   type (EdgeBuffer_t)                         :: edgeveloc
+   
+   public :: cslam_run, cslam_runair, cslam_runairdensity
+-  public :: cslam_init1,cslam_init2, cslam_mcgregor, cellghostbuf, edgeveloc
++  public :: cellghostbuf, edgeveloc, cslam_init1,cslam_init2, cslam_mcgregor, cslam_mcgregordss
+ contains
+ 
+ subroutine cslam_run(elem,cslam,hybrid,deriv,tstep,tl,nets,nete)
+@@ -81,15 +79,17 @@
+         call reconstruction(tracer0, cslam(ie),elem(ie)%corners(1),recons)
+         call monotonic_gradient_cart(tracer0, cslam(ie),recons, elem(ie)%desc)
+         tracer1=0.0D0   
+-        do h=1,jall
+-          jx  = weights_lgr_index_all(h,1)
+-          jy  = weights_lgr_index_all(h,2)
+-          jdx = weights_eul_index_all(h,1)
+-          jdy = weights_eul_index_all(h,2)
+-              
+-          call remap(tracer0(jdx,jdy),tracer1(jx,jy),weights_all(h,:),&
+-                     recons(:,jdx,jdy),cslam(ie)%spherecentroid(:,jdx,jdy))             
+-        end do
++!         do h=1,jall
++!           jx  = weights_lgr_index_all(h,1)
++!           jy  = weights_lgr_index_all(h,2)
++!           jdx = weights_eul_index_all(h,1)
++!           jdy = weights_eul_index_all(h,2)
++!               
++!           call remap(tracer0(jdx,jdy),tracer1(jx,jy),weights_all(h,:),&
++!                      recons(:,jdx,jdy),cslam(ie)%spherecentroid(:,jdx,jdy))             
++!         end do
++        call remap(tracer0,tracer1,weights_all, recons, &
++                   cslam(ie)%spherecentroid, weights_eul_index_all, weights_lgr_index_all, jall)
+         ! finish scheme
+         do j=1,nc
+           do i=1,nc
+@@ -99,14 +99,14 @@
+       enddo  !End Tracer
+     end do  !End Level
+     !note write tl%np1 in buffer
+-    call ghostVpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1),nhc,nc,nlev,ntrac,0,elem(ie)%desc)
++    call ghostVpack(cellghostbuf, cslam(ie)%c,nhc,nc,nlev,ntrac,0,tl%np1,timelevels,elem(ie)%desc)
+   end do
+   call t_startf('CSLAM Communication')
+   call ghost_exchangeV(hybrid,cellghostbuf,nhc,nc)
+   call t_stopf('CSLAM Communication')
+   !-----------------------------------------------------------------------------------!
+   do ie=nets,nete
+-    call ghostVunpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1), nhc, nc,nlev,ntrac, 0, elem(ie)%desc)
++     call ghostVunpack(cellghostbuf, cslam(ie)%c, nhc, nc,nlev,ntrac, 0, tl%np1, timelevels,elem(ie)%desc)
+   enddo
+ end subroutine cslam_run
+ 
+@@ -151,7 +151,8 @@
+   real (kind=real_kind), dimension(1-nhc:nc+nhc,1-nhc:nc+nhc)        :: tracer_air0   
+   real (kind=real_kind), dimension(1:nc,1:nc)                        :: tracer1, tracer_air1 
+   real (kind=real_kind), dimension(5,1-nhe:nc+nhe,1-nhe:nc+nhe)      :: recons_air   
+-   
++  
++  call t_startf('CSLAM scheme') 
+   do ie=nets, nete
+     do k=1,nlev
+       call cslam_mesh_dep(elem(ie),deriv,cslam(ie),tstep,tl,k)
+@@ -163,14 +164,9 @@
+       call reconstruction(tracer_air0, cslam(ie),elem(ie)%corners(1),recons_air)
+       call monotonic_gradient_cart(tracer_air0, cslam(ie),recons_air, elem(ie)%desc)
+       tracer_air1=0.0D0   
+-      do h=1,jall
+-        jx  = weights_lgr_index_all(h,1)
+-        jy  = weights_lgr_index_all(h,2)
+-        jdx = weights_eul_index_all(h,1)
+-        jdy = weights_eul_index_all(h,2)
+-        call remap(tracer_air0(jdx,jdy),tracer_air1(jx,jy),weights_all(h,:),&
+-                   recons_air(:,jdx,jdy),cslam(ie)%spherecentroid(:,jdx,jdy))             
+-      end do
++
++      call remap(tracer_air0,tracer_air1,weights_all, recons_air, &
++                 cslam(ie)%spherecentroid, weights_eul_index_all, weights_lgr_index_all, jall)             
+       ! finish scheme
+       do j=1,nc
+         do i=1,nc
+@@ -182,17 +178,9 @@
+         tracer0=cslam(ie)%c(:,:,k,itr,tl%n0)
+         call reconstruction(tracer0, cslam(ie),elem(ie)%corners(1),recons)
+         call monotonic_gradient_cart(tracer0, cslam(ie),recons, elem(ie)%desc)
+-        tracer1=0.0D0   
+-        do h=1,jall
+-          jx  = weights_lgr_index_all(h,1)
+-          jy  = weights_lgr_index_all(h,2)
+-          jdx = weights_eul_index_all(h,1)
+-          jdy = weights_eul_index_all(h,2)
+-         
+-          call remap_air(tracer0(jdx,jdy),tracer1(jx,jy),tracer_air0(jdx,jdy),&
+-                       weights_all(h,:), recons(:,jdx,jdy),recons_air(:,jdx,jdy),&
+-                       cslam(ie)%spherecentroid(:,jdx,jdy))
+-        end do                     
++        tracer1=0.0D0                      
++        call remap_air(tracer0,tracer1,tracer_air0,weights_all, recons,recons_air,&
++                       cslam(ie)%spherecentroid,weights_eul_index_all, weights_lgr_index_all, jall)
+         ! finish scheme
+         do j=1,nc
+           do i=1,nc
+@@ -203,22 +191,21 @@
+       enddo  !End Tracer
+     end do  !End Level
+     !note write tl%np1 in buffer
+-    call ghostVpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1),nhc,nc,nlev,ntrac,0,elem(ie)%desc)
++    call ghostVpack(cellghostbuf, cslam(ie)%c,nhc,nc,nlev,ntrac,0,tl%np1,timelevels,elem(ie)%desc)
+   end do
++  call t_stopf('CSLAM scheme')
+   call t_startf('CSLAM Communication')
+   call ghost_exchangeV(hybrid,cellghostbuf,nhc,nc)
+   call t_stopf('CSLAM Communication')
+   !-----------------------------------------------------------------------------------!
++  call t_startf('CSLAM Unpack')
+   do ie=nets,nete
+-     call ghostVunpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1), nhc, nc,nlev,ntrac, 0, elem(ie)%desc)
++     call ghostVunpack(cellghostbuf, cslam(ie)%c, nhc, nc,nlev,ntrac, 0, tl%np1, timelevels,elem(ie)%desc)
+   enddo
++  call t_stopf('CSLAM Unpack')
+ end subroutine cslam_runairdensity
+ 
+ 
+-
+-
+-
+-
+ ! use this subroutine for benchmark tests, couple airdensity with tracer concentration
+ subroutine cslam_runair(elem,cslam,hybrid,deriv,tstep,tl,nets,nete)
+   ! ---------------------------------------------------------------------------------
+@@ -274,15 +261,8 @@
+         if (itr==1) then !calculation for air density  (the first tracer is supposed to be)
+           recons_air=recons
+           tracer_air0=tracer0
+-          do h=1,jall
+-            jx  = weights_lgr_index_all(h,1)
+-            jy  = weights_lgr_index_all(h,2)
+-            jdx = weights_eul_index_all(h,1)
+-            jdy = weights_eul_index_all(h,2)
+-                
+-            call remap(tracer0(jdx,jdy),tracer1(jx,jy),weights_all(h,:),&
+-                       recons(:,jdx,jdy),cslam(ie)%spherecentroid(:,jdx,jdy))             
+-          end do
++          call remap(tracer0,tracer1,weights_all, recons, &
++                 cslam(ie)%spherecentroid, weights_eul_index_all, weights_lgr_index_all, jall)
+           ! finish scheme
+           do j=1,nc
+             do i=1,nc
+@@ -290,17 +270,9 @@
+               cslam(ie)%c(i,j,k,itr,tl%np1)=tracer_air1(i,j)
+             end do
+           end do
+-        else !calculation for the other tracers
+-          do h=1,jall
+-            jx  = weights_lgr_index_all(h,1)
+-            jy  = weights_lgr_index_all(h,2)
+-            jdx = weights_eul_index_all(h,1)
+-            jdy = weights_eul_index_all(h,2)
+-           
+-            call remap_air(tracer0(jdx,jdy),tracer1(jx,jy),tracer_air0(jdx,jdy),&
+-                         weights_all(h,:), recons(:,jdx,jdy),recons_air(:,jdx,jdy),&
+-                         cslam(ie)%spherecentroid(:,jdx,jdy))
+-          end do                     
++        else !calculation for the other tracers    
++          call remap_air(tracer0,tracer1,tracer_air0,weights_all, recons,recons_air,&
++                       cslam(ie)%spherecentroid,weights_eul_index_all, weights_lgr_index_all, jall)                
+           ! finish scheme
+           do j=1,nc
+             do i=1,nc
+@@ -312,84 +284,125 @@
+       enddo  !End Tracer
+     end do  !End Level
+     !note write tl%np1 in buffer
+-    call ghostVpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1),nhc,nc,nlev,ntrac,0,elem(ie)%desc)
++    call ghostVpack(cellghostbuf, cslam(ie)%c,nhc,nc,nlev,ntrac,0,tl%np1,timelevels,elem(ie)%desc)
+   end do
+   call t_startf('CSLAM Communication')
+   call ghost_exchangeV(hybrid,cellghostbuf,nhc,nc)
+   call t_stopf('CSLAM Communication')
+   !-----------------------------------------------------------------------------------!
+   do ie=nets,nete
+-     call ghostVunpack(cellghostbuf, cslam(ie)%c(:,:,:,:,tl%np1), nhc, nc,nlev,ntrac, 0, elem(ie)%desc)
++     call ghostVunpack(cellghostbuf, cslam(ie)%c, nhc, nc,nlev,ntrac, 0, tl%np1, timelevels,elem(ie)%desc)
+   enddo
+ end subroutine cslam_runair
+ 
+ 
+ ! do the remapping
+-subroutine remap(tracer0,tracer1,weights,recons,centroid)
+-  real (kind=real_kind), intent(in)               :: tracer0
+-  real (kind=real_kind), intent(inout)            :: tracer1
+-  real (kind=real_kind), intent(in)               :: weights(6),recons(5),centroid(5)
+-    
+-  tracer1 = tracer1+weights(1)*(&
+-       ! all constant terms 
+-       tracer0 - recons(1)*centroid(1) - recons(2)*centroid(2) &
+-       + recons(3)*(2.0D0*centroid(1)**2 -centroid(3)) &
+-       + recons(4)*(2.0D0*centroid(2)**2 -centroid(4)) &
+-       + recons(5)*(2.0D0*centroid(1)*centroid(2)-centroid(5))) + &
+-       ! linear terms
+-       weights(2)*&
+-       (recons(1) - recons(3)*2.0D0*centroid(1)- recons(5)*centroid(2)) + &
+-       weights(3)*&
+-       (recons(2) - recons(4)*2.0D0*centroid(2)- recons(5)*centroid(1)) + &
+-       ! quadratic terms
+-       weights(4)*recons(3)+&
+-       weights(5)*recons(4)+&
+-       weights(6)*recons(5)
++subroutine remap(tracer0,tracer1,weights,recons,centroid, &
++                 weights_eul_index_all, weights_lgr_index_all, jall)
++  real (kind=real_kind), intent(in)           :: tracer0(1-nhc:nc+nhc,1-nhc:nc+nhc)
++  real (kind=real_kind), intent(inout)        :: tracer1(1:nc,1:nc)
++  real (kind=real_kind), intent(in)           :: weights(10*(nc+2*nhe)*(nc+2*nhe),6)
++  real (kind=real_kind), intent(in)           :: recons(5,1-nhe:nc+nhe,1-nhe:nc+nhe)
++  real (kind=real_kind), intent(in)           :: centroid(5,1-nhe:nc+nhe,1-nhe:nc+nhe)
++  integer (kind=int_kind), intent(in)        :: weights_eul_index_all(10*(nc+2*nhe)*(nc+2*nhe),2)
++  integer (kind=int_kind), intent(in)        :: weights_lgr_index_all(10*(nc+2*nhe)*(nc+2*nhe),2)
++  integer (kind=int_kind), intent(in)        :: jall  
++  
++  integer                                     :: h, jx, jy, jdx, jdy
++       
++    do h=1,jall
++      jx  = weights_lgr_index_all(h,1)
++      jy  = weights_lgr_index_all(h,2)
++      jdx = weights_eul_index_all(h,1)
++      jdy = weights_eul_index_all(h,2)
++
++      tracer1(jx,jy) = tracer1(jx,jy)+weights(h,1)*(&
++         ! all constant terms 
++         tracer0(jdx,jdy) - recons(1,jdx,jdy)*centroid(1,jdx,jdy) &
++         - recons(2,jdx,jdy)*centroid(2,jdx,jdy) &
++         + recons(3,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)**2 -centroid(3,jdx,jdy)) &
++         + recons(4,jdx,jdy)*(2.0D0*centroid(2,jdx,jdy)**2 -centroid(4,jdx,jdy)) &
++         + recons(5,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)*centroid(2,jdx,jdy)-centroid(5,jdx,jdy))) + &
++         ! linear terms
++         weights(h,2)*&
++         (recons(1,jdx,jdy) - recons(3,jdx,jdy)*2.0D0*centroid(1,jdx,jdy) &
++          - recons(5,jdx,jdy)*centroid(2,jdx,jdy)) + &
++         weights(h,3)*&
++         (recons(2,jdx,jdy) - recons(4,jdx,jdy)*2.0D0*centroid(2,jdx,jdy) &
++         - recons(5,jdx,jdy)*centroid(1,jdx,jdy)) + &
++         ! quadratic terms
++         weights(h,4)*recons(3,jdx,jdy)+&
++         weights(h,5)*recons(4,jdx,jdy)+&
++         weights(h,6)*recons(5,jdx,jdy)
++     end do
+ end subroutine remap
+ 
+ ! do remapping with air (i.e. conserve mass of air density * concentration),
+ ! see Nair et.al 2010 in JCP: A class of deformational flow test cases for linear transport
+ ! schemes on the sphere, Appendix B
+-subroutine remap_air(tracer0,tracer1,tracer_air,weights,recons, recons_air,centroid)
+-  real (kind=real_kind), intent(in)         :: tracer0, tracer_air
+-  real (kind=real_kind), intent(inout)      :: tracer1
+-  real (kind=real_kind), intent(in)         :: weights(6),recons(5),recons_air(5),centroid(5)
+-    
+-  tracer1 = tracer1+&
+-        ! air density times tracer reconstruction
+-        tracer_air*(weights(1)*(&      ! 1 is for air
+-        ! all constant terms 
+-        tracer0 - recons(1)*centroid(1) - recons(2)*centroid(2) &
+-        + recons(3)*(2.0D0*centroid(1)**2 -centroid(3)) &
+-        + recons(4)*(2.0D0*centroid(2)**2 -centroid(4)) &
+-        + recons(5)*(2.0D0*centroid(1)*centroid(2)-centroid(5))) + &
+-        ! linear terms
+-        weights(2)* &
+-        (recons(1)- recons(3)*2.0D0*centroid(1) - recons(5)*centroid(2)) + &
+-        weights(3)* &
+-        (recons(2) - recons(4)*2.0D0*centroid(2) - recons(5)*centroid(1)) + &
+-        ! quadratic terms
+-        weights(4)*recons(3) + &
+-        weights(5)*recons(4) + &
+-        weights(6)*recons(5)) + &
++subroutine remap_air(tracer0,tracer1,tracer_air, weights,recons, recons_air, centroid, &
++                 weights_eul_index_all, weights_lgr_index_all, jall)
++                 
++  real (kind=real_kind), intent(in)           :: tracer0(1-nhc:nc+nhc,1-nhc:nc+nhc)
++  real (kind=real_kind), intent(inout)        :: tracer1(1:nc,1:nc)
++  real (kind=real_kind), intent(in)           :: tracer_air(1-nhc:nc+nhc,1-nhc:nc+nhc)
++  real (kind=real_kind), intent(in)           :: recons(5,1-nhe:nc+nhe,1-nhe:nc+nhe)
++  real (kind=real_kind), intent(in)           :: recons_air(5,1-nhe:nc+nhe,1-nhe:nc+nhe)
++  
++  real (kind=real_kind), intent(in)           :: weights(10*(nc+2*nhe)*(nc+2*nhe),6)
++  real (kind=real_kind), intent(in)           :: centroid(5,1-nhe:nc+nhe,1-nhe:nc+nhe)
++  integer (kind=int_kind), intent(in)         :: weights_eul_index_all(10*(nc+2*nhe)*(nc+2*nhe),2)
++  integer (kind=int_kind), intent(in)         :: weights_lgr_index_all(10*(nc+2*nhe)*(nc+2*nhe),2)
++  integer (kind=int_kind), intent(in)         :: jall  
+ 
+-        !tracer times air reconstruction
+-        tracer0*(weights(1)*(&      
+-        ! all constant terms 
+-!       tracer_air &  this term cancels it out
+-        - recons_air(1)*centroid(1) - recons_air(2)*centroid(2) &
+-        + recons_air(3)*(2.0D0*centroid(1)**2 -centroid(3)) &
+-        + recons_air(4)*(2.0D0*centroid(2)**2 -centroid(4)) &
+-        + recons_air(5)*(2.0D0*centroid(1)*centroid(2)-centroid(5))) + &
+-        ! linear terms
+-        weights(2)* &
+-        (recons_air(1) - recons_air(3)*2.0D0*centroid(1) - recons_air(5)*centroid(2)) + &
+-        weights(3)* &
+-        (recons_air(2) - recons_air(4)*2.0D0*centroid(2) - recons_air(5)*centroid(1)) + &
+-        ! quadratic terms
+-        weights(4)*recons_air(3)+&
+-        weights(5)*recons_air(4)+&
+-        weights(6)*recons_air(5))
++  integer                                     :: h, jx, jy, jdx, jdy    
++  
++  do h=1,jall
++    jx  = weights_lgr_index_all(h,1)
++    jy  = weights_lgr_index_all(h,2)
++    jdx = weights_eul_index_all(h,1)
++    jdy = weights_eul_index_all(h,2)                     
++    tracer1(jx,jy) = tracer1(jx,jy)+&
++          ! air density times tracer reconstruction
++          tracer_air(jdx,jdy)*(weights(h,1)*(&      ! 1 is for air
++          ! all constant terms 
++          tracer0(jdx,jdy) - recons(1,jdx,jdy)*centroid(1,jdx,jdy) &
++          - recons(2,jdx,jdy)*centroid(2,jdx,jdy) &
++          + recons(3,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)**2 -centroid(3,jdx,jdy)) &
++          + recons(4,jdx,jdy)*(2.0D0*centroid(2,jdx,jdy)**2 -centroid(4,jdx,jdy)) &
++          + recons(5,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)*centroid(2,jdx,jdy)-centroid(5,jdx,jdy))) + &
++          ! linear terms
++          weights(h,2)* &
++          (recons(1,jdx,jdy)- recons(3,jdx,jdy)*2.0D0*centroid(1,jdx,jdy) &
++           - recons(5,jdx,jdy)*centroid(2,jdx,jdy)) + &
++          weights(h,3)* &
++          (recons(2,jdx,jdy) - recons(4,jdx,jdy)*2.0D0*centroid(2,jdx,jdy) &
++          - recons(5,jdx,jdy)*centroid(1,jdx,jdy)) + &
++          ! quadratic terms
++          weights(h,4)*recons(3,jdx,jdy) + &
++          weights(h,5)*recons(4,jdx,jdy) + &
++          weights(h,6)*recons(5,jdx,jdy)) + &
++
++          !tracer times air reconstruction
++          tracer0(jdx,jdy)*(weights(h,1)*(&      
++          ! all constant terms 
++  !       tracer_air &  this term cancels it out
++          - recons_air(1,jdx,jdy)*centroid(1,jdx,jdy) - recons_air(2,jdx,jdy)*centroid(2,jdx,jdy) &
++          + recons_air(3,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)**2 -centroid(3,jdx,jdy)) &
++          + recons_air(4,jdx,jdy)*(2.0D0*centroid(2,jdx,jdy)**2 -centroid(4,jdx,jdy)) &
++          + recons_air(5,jdx,jdy)*(2.0D0*centroid(1,jdx,jdy)*centroid(2,jdx,jdy)-centroid(5,jdx,jdy))) + &
++          ! linear terms
++          weights(h,2)* &
++          (recons_air(1,jdx,jdy) - recons_air(3,jdx,jdy)*2.0D0*centroid(1,jdx,jdy) &
++          - recons_air(5,jdx,jdy)*centroid(2,jdx,jdy)) + &
++          weights(h,3)* &
++          (recons_air(2,jdx,jdy) - recons_air(4,jdx,jdy)*2.0D0*centroid(2,jdx,jdy) &
++          - recons_air(5,jdx,jdy)*centroid(1,jdx,jdy)) + &
++          ! quadratic terms
++          weights(h,4)*recons_air(3,jdx,jdy)+&
++          weights(h,5)*recons_air(4,jdx,jdy)+&
++          weights(h,6)*recons_air(5,jdx,jdy))
++  end do
+ end subroutine remap_air
+ 
+ 
+@@ -471,9 +484,11 @@
+   use control_mod, only : test_cfldep
+ 
+   use derivative_mod, only : derivative_t
+-#ifdef _CSLAM
++
++#ifndef _PRIM
+   use cslam_bsp_mod, only: boomerang, solidbody
+ #endif
++
+   implicit none
+   type (derivative_t)  , intent(in) :: deriv
+   type (cslam_struct), intent(inout)   :: cslam
+@@ -764,7 +779,7 @@
+ !        
+ ! OUTPUT: 
+ !-----------------------------------------------------------------------------------!
+-subroutine cslam_mcgregor(elem, deriv, tstep, vstar, order)
++subroutine cslam_mcgregor(elem, deriv, tstep, vhat, vstar,order)
+   use element_mod, only : element_t
+   use derivative_mod, only : derivative_t, gradient_sphere, ugradv_sphere, vorticity_sphere
+   implicit none
+@@ -773,17 +788,14 @@
+   type (derivative_t), intent(in)                             :: deriv      ! derivative struct
+   real (kind=real_kind), intent(in)                           :: tstep
+   real (kind=real_kind), dimension(np,np,2), intent(inout)    :: vstar
++  real (kind=real_kind), dimension(np,np,2), intent(in)       :: vhat
++  
+   integer, intent(in)                                         :: order
+ 
+   integer                                            :: i
+-  real (kind=real_kind), dimension(np,np,2)          :: vgradv, ugradv, vstarold, vgradv2
+-  real (kind=real_kind), dimension(np,np,2)          :: gradvstar
++  real (kind=real_kind), dimension(np,np,2)          :: ugradv
+   real (kind=real_kind)                              :: timetaylor
+-  
+-  real (kind=real_kind), dimension(np,np)            :: tmp   ! mean velocity in lat/lon or relative vorticity
+-  
+-  vstarold=vstar
+-  vgradv=vstar
++    
+   ugradv=vstar
+   timetaylor=1
+   do i=1,order
+@@ -800,14 +812,78 @@
+ !     timetaylor=-timetaylor*tstep/(i+1)
+ !     vstar=vstar + timetaylor*vgradv
+     
+-    ugradv=ugradv_sphere(vstarold,ugradv,deriv,elem)
++    ugradv=ugradv_sphere(vhat,ugradv,deriv,elem)
+     timetaylor=-timetaylor*tstep/(i+1)
+     
+     vstar=vstar + timetaylor*ugradv  
+   end do
+ end subroutine cslam_mcgregor
+ !END SUBROUTINE CSLAM_MCGREGOR------------------------------------------CE-for CSLAM!
++! ----------------------------------------------------------------------------------!
++!SUBROUTINE CSLAM_MCGREGORDSS-------------------------------------------CE-for CSLAM!
++! AUTHOR: CHRISTOPH ERATH, 26. May 2012                                             !
++! DESCRIPTION: ! using McGregor AMS 1993 scheme: Economical Determination of        !
++!                Departure Points for Semi-Lagrangian Models                        !
++!                McGegror version with DSS every ugradv                             !
++! CALLS: 
++! INPUT: 
++!        
++! OUTPUT: 
++!-----------------------------------------------------------------------------------!
++subroutine cslam_mcgregordss(elem,cslam,nets,nete, hybrid, deriv, tstep, ordertaylor)
++  use derivative_mod, only : derivative_t, ugradv_sphere
++  use edge_mod, only : edgevpack, edgevunpack
++  use bndry_mod, only : bndry_exchangev
++  
++  implicit none
+ 
+-#endif
++  type (element_t), intent(inout)                :: elem(:)
++  type (cslam_struct), intent(in)                :: cslam(:)
+ 
++  integer, intent(in)                         :: nets  ! starting thread element number (private)
++  integer, intent(in)                         :: nete  ! ending thread element number   (private)
++  type (hybrid_t), intent(in)                 :: hybrid   ! distributed parallel structure (shared)
++
++  type (derivative_t), intent(in)                             :: deriv      ! derivative struct
++  real (kind=real_kind), intent(in)                           :: tstep
++  integer, intent(in)                                         :: ordertaylor
++
++  real (kind=real_kind), dimension(nets:nete,np,np,2,nlev)    :: ugradv
++  real (kind=real_kind), dimension(nets:nete,np,np,2,nlev)    :: vhat
++  integer                                                     :: ie, k, order
++  real (kind=real_kind), dimension(np,np,2)                   :: ugradvtmp
++  real (kind=real_kind)                                       :: timetaylor
++
++    !------------------------------------------------------------------------------------
++  timetaylor=1  
++  do  order=1,ordertaylor
++    timetaylor=-timetaylor*tstep/(order+1)  
++    do ie=nets,nete
++      if (order==1)then
++        ugradv(ie,:,:,:,:)=elem(ie)%derived%vstar(:,:,:,:) 
++        vhat(ie,:,:,:,:)=(cslam(ie)%vn0(:,:,:,:) + ugradv(ie,:,:,:,:))/2 
++      endif
++      do k=1,nlev
++        ugradvtmp=ugradv_sphere(vhat(ie,:,:,:,k),ugradv(ie,:,:,:,k),deriv,elem(ie))
++        ugradv(ie,:,:,1,k) = elem(ie)%spheremp(:,:)*ugradvtmp(:,:,1) 
++        ugradv(ie,:,:,2,k) = elem(ie)%spheremp(:,:)*ugradvtmp(:,:,2) 
++      enddo 
++      call edgeVpack(edgeveloc,ugradv(ie,:,:,1,:),nlev,0,elem(ie)%desc)
++      call edgeVpack(edgeveloc,ugradv(ie,:,:,2,:),nlev,nlev,elem(ie)%desc)
++    enddo 
++    call bndry_exchangeV(hybrid,edgeveloc)
++    do ie=nets,nete
++       call edgeVunpack(edgeveloc,ugradv(ie,:,:,1,:),nlev,0,elem(ie)%desc)
++       call edgeVunpack(edgeveloc,ugradv(ie,:,:,2,:),nlev,nlev,elem(ie)%desc)
++       do k=1, nlev  
++         ugradv(ie,:,:,1,k)=ugradv(ie,:,:,1,k)*elem(ie)%rspheremp(:,:)
++         ugradv(ie,:,:,2,k)=ugradv(ie,:,:,2,k)*elem(ie)%rspheremp(:,:)
++         elem(ie)%derived%vstar(:,:,:,k)=elem(ie)%derived%vstar(:,:,:,k) + timetaylor*ugradv(ie,:,:,:,k)
++       end do
++    end do
++  end do  
++
++end subroutine cslam_mcgregordss
++!END SUBROUTINE CSLAM_MCGREGORDSS---------------------------------------CE-for CSLAM!
++
+ end module cslam_mod
+Index: share/cslam_reconstruction_mod.F90
+===================================================================
+--- share/cslam_reconstruction_mod.F90	(revision 2082)
++++ share/cslam_reconstruction_mod.F90	(working copy)
+@@ -11,8 +11,6 @@
+ !-----------------------------------------------------------------------------------!
+ module cslam_reconstruction_mod
+ 
+-#ifndef MESH
+-
+   use kinds, only                  : int_kind, real_kind
+   use dimensions_mod, only         : nc,nhc,nhe
+   use coordinate_systems_mod, only : cartesian2D_t,cartesian3D_t
+@@ -1007,6 +1005,4 @@
+ end subroutine reconstruct_cubic_haloy
+ !END SUBROUTINE RECONSTRUCTION_CUBIC_HALOY------------------------------CE-for CSLAM!
+ 
+-#endif
+-
+ end module cslam_reconstruction_mod
+Index: share/cube_mod.F90
+===================================================================
+--- share/cube_mod.F90	(revision 2100)
++++ share/cube_mod.F90	(working copy)
+@@ -215,6 +215,11 @@
+   ! ucontra = Dinv * u  =  metinv * ucov   
+   ! ucov    = D^t * u   =  met * ucontra
+   !
++  ! we also compute DE = D*E, where 
++  ! E = eigenvectors of metinv as a basis      metinv = E LAMBDA E^t
++  !   
++  ! ueig = E^t ucov  = E^t D^t u =  (DE)^t u  
++  !  
+   !
+   ! so if we want to tweak the mapping by a factor alpha (so he weights add up to 4pi, for example)
+   ! we take:
+@@ -237,7 +242,7 @@
+     real (kind=longdouble_kind)      :: gll_points(np)
+     ! Local variables
+     integer ii,face_no
+-    integer i,j
++    integer i,j,nn
+     integer iptr
+ 
+     real (kind=real_kind) :: r         ! distance from origin for point on cube tangent to unit sphere
+@@ -248,6 +253,7 @@
+     real (kind=real_kind) :: x1        ! 1st cube face coordinate
+     real (kind=real_kind) :: x2        ! 2nd cube face coordinate
+     real (kind=real_kind) :: tmpD(2,2)
++    real (kind=real_kind) :: M(2,2),E(2,2),eig(2),DE(2,2)
+     real (kind=real_kind) :: l1, l2     ! eigen values of met
+ 
+     face_no = elem%vertex%face_number
+@@ -318,7 +324,53 @@
+           elem%metinv(1,2,i,j) = -elem%met(1,2,i,j)/(detD*detD)
+           elem%metinv(2,1,i,j) = -elem%met(2,1,i,j)/(detD*detD)
+           elem%metinv(2,2,i,j) =  elem%met(1,1,i,j)/(detD*detD)
+-          
++#if 0
++          ! compute eigenvectors of metinv
++          M = elem%metinv(:,:,i,j)
++
++          eig(1) = (M(1,1) + M(2,2) + sqrt(4.0d0*M(1,2)*M(2,1) + &
++              (M(1,1) - M(2,2))**2))/2.0d0
++          eig(2) = (M(1,1) + M(2,2) - sqrt(4.0d0*M(1,2)*M(2,1) + &
++              (M(1,1) - M(2,2))**2))/2.0d0
++
++          do nn=1,2
++             if ( abs( M(1,1)-eig(nn)) > abs(M(2,2)-eig(nn)) ) then
++                E(1,nn)= -M(1,2)/( M(1,1)-eig(nn) )
++                E(2,nn)=1
++             else
++                E(1,nn)=1
++                E(2,nn)= -M(1,2)/( M(2,2)-eig(nn) )
++             endif
++             ! normalize
++             norm = sqrt(E(1,nn)**2 + E(2,nn)**2)
++             E(:,nn)=E(:,nn)/norm
++          enddo
++          DE(1,1)=sum(M(1,:)*E(:,1))
++          DE(1,2)=sum(M(1,:)*E(:,2))
++          DE(2,1)=sum(M(2,:)*E(:,1))
++          DE(2,2)=sum(M(2,:)*E(:,2))
++
++          ! verify that M = E LAMBDA E^t   and E E^t = I
++          ! or:  M E = E LAMBDA
++          print *,'E E^t should be I'
++          write(*,'(2e20.10)') sum(E(1,:)*E(1,:)),sum(E(1,:)*E(2,:))
++          write(*,'(2e20.10)') sum(E(2,:)*E(1,:)),sum(E(2,:)*E(2,:))
++          print *,'M E - E LAMBDA (should be zero)'
++          write(*,'(2e20.10)') sum(M(1,:)*E(:,1))-eig(1)*E(1,1),sum(M(1,:)*E(:,2))-eig(2)*E(1,2)
++          write(*,'(2e20.10)') sum(M(2,:)*E(:,1))-eig(1)*E(2,1),sum(M(2,:)*E(:,2))-eig(2)*E(2,2)
++
++          ! Lambda = diag( nu1*eig1, nu2*eig2 )
++          ! viscosity tensor = DE * Lambda * (DE)^t
++          nu1=1
++          nu2=1
++          DEL(:,1) = nu1*eig(1)*DE(:,1)
++          DEL(:,2) = nu2*eig(2)*DE(:,2)
++
++          V(1,1)=sum(DEL(1,:)*DE(1,:))
++          V(1,2)=sum(DEL(1,:)*DE(2,:))
++          V(2,1)=sum(DEL(2,:)*DE(1,:))
++          V(2,2)=sum(DEL(2,:)*DE(2,:))
++#endif          
+        end do
+     end do
+ 
+Index: share/dimensions_mod.F90
+===================================================================
+--- share/dimensions_mod.F90	(revision 2082)
++++ share/dimensions_mod.F90	(working copy)
+@@ -13,7 +13,7 @@
+ ! set MAX number of tracers.  actual number of tracers is a run time argument  
+ #ifndef CAM
+   integer, parameter         :: qsize_d=4           ! SE tracers  
+-  integer, parameter         :: ntrac_d=0          ! CSLAM tracers
++  integer, parameter         :: ntrac_d=4          ! CSLAM tracers
+ #endif
+   integer, parameter, public :: nvar = 3 ! FI # dependent variables 
+ 
+@@ -26,7 +26,7 @@
+   integer, parameter, public :: nc=NC       
+ 
+   ! set the number of tracers
+-  integer         :: ntrac =NTRAC
++  integer         :: ntrac =ntrac_d
+   integer         :: qsize=0
+ #else   
+   integer, parameter, public :: np = NP
+Index: share/edge_mod.F90
+===================================================================
+--- share/edge_mod.F90	(revision 2082)
++++ share/edge_mod.F90	(working copy)
+@@ -77,7 +77,6 @@
+      real (kind=real_kind), dimension(:,:,:,:), pointer :: buf
+      real (kind=real_kind), dimension(:,:,:,:), pointer :: receive
+      integer :: nlyr ! Number of layers
+-     integer :: ntrac ! Number of tracers
+      integer :: nbuf ! size of the horizontal dimension of the buffers.
+   end type GhostBuffer_t
+   
+@@ -86,7 +85,6 @@
+      real (kind=real_kind), dimension(:,:,:,:,:), pointer :: buf
+      real (kind=real_kind), dimension(:,:,:,:,:), pointer :: receive
+      integer :: nlyr ! Number of layers
+-     integer :: ntrac ! Number of tracers
+      integer :: nbuf ! size of the horizontal dimension of the buffers.
+   end type GhostBuffertr_t
+   
+@@ -1742,7 +1740,6 @@
+ !$OMP MASTER
+ #endif
+     ghost%nlyr=nlyr
+-    ghost%ntrac=ntrac
+     ghost%nbuf=nbuf
+     allocate(ghost%buf(npoints,nhc,nlyr,ntrac,nbuf))
+     ghost%buf=0
+@@ -1762,16 +1759,18 @@
+ ! Christoph Erath
+ !> Packs the halo zone from v
+ ! =========================================
+-subroutine ghostVpack(edge,v,nhc,npoints,vlyr,ntrac,kptr,desc)
+-  use dimensions_mod, only : max_corner_elem
++! NOTE: I have to give timelevels as argument, because element_mod is not compiled first
++! and the array call has to be done in this way because of performance reasons!!!
++subroutine ghostVpack(edge,v,nhc,npoints,vlyr,ntrac,kptr,tn0,timelevels,desc)
++  use dimensions_mod, only : max_corner_elem, ntrac_d
+   use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+ 
+   type (Ghostbuffertr_t)                      :: edge
+   integer,              intent(in)   :: vlyr
+   integer,              intent(in)   :: ntrac
++  integer,              intent(in)   :: npoints,nhc,kptr, tn0, timelevels
+   
+-  real (kind=real_kind),intent(in)   :: v(1-nhc:npoints+nhc,1-nhc:npoints+nhc,vlyr,ntrac)
+-  integer,              intent(in)   :: npoints,nhc,kptr
++  real (kind=real_kind),intent(in)   :: v(1-nhc:npoints+nhc,1-nhc:npoints+nhc,vlyr,ntrac_d,timelevels)
+   type (EdgeDescriptor_t),intent(in) :: desc
+ 
+   ! Local variables
+@@ -1808,10 +1807,10 @@
+     do k=1,vlyr
+       do i=1,npoints
+         do j=1,nhc
+-          edge%buf(i,j,kptr+k,itr,is)   = v(i  ,j ,k,itr)
+-          edge%buf(i,j,kptr+k,itr,ie)   = v(npoints-j+1 ,i ,k,itr)
+-          edge%buf(i,j,kptr+k,itr,in)   = v(i  ,npoints-j+1,k,itr)
+-          edge%buf(i,j,kptr+k,itr,iw)   = v(j  ,i ,k,itr)
++          edge%buf(i,j,kptr+k,itr,is)   = v(i  ,j ,k,itr,tn0)
++          edge%buf(i,j,kptr+k,itr,ie)   = v(npoints-j+1 ,i ,k,itr,tn0)
++          edge%buf(i,j,kptr+k,itr,in)   = v(i  ,npoints-j+1,k,itr,tn0)
++          edge%buf(i,j,kptr+k,itr,iw)   = v(j  ,i ,k,itr,tn0)
+         enddo
+       end do
+     end do
+@@ -1828,7 +1827,7 @@
+        do i=1,npoints
+          do j=1,nhc
+            ir = npoints-i+1
+-           edge%buf(ir,j,kptr+k,itr,is)=v(i,j,k,itr)
++           edge%buf(ir,j,kptr+k,itr,is)=v(i,j,k,itr,tn0)
+          enddo
+        enddo
+      enddo
+@@ -1842,7 +1841,7 @@
+        do i=1,npoints
+          do j=1,nhc
+            ir = npoints-i+1
+-           edge%buf(ir,j,kptr+k,itr,ie)=v(npoints-j+1,i,k,itr)
++           edge%buf(ir,j,kptr+k,itr,ie)=v(npoints-j+1,i,k,itr,tn0)
+           enddo
+         enddo
+       enddo
+@@ -1856,7 +1855,7 @@
+         do i=1,npoints
+           do j=1,nhc
+             ir = npoints-i+1
+-            edge%buf(ir,j,kptr+k,itr,in)=v(i,npoints-j+1,k,itr)
++            edge%buf(ir,j,kptr+k,itr,in)=v(i,npoints-j+1,k,itr,tn0)
+           enddo
+         enddo
+       enddo
+@@ -1870,7 +1869,7 @@
+        do i=1,npoints
+          do j=1,nhc
+             ir = npoints-i+1
+-            edge%buf(ir,j,kptr+k,itr,iw)=v(j,i,k,itr)
++            edge%buf(ir,j,kptr+k,itr,iw)=v(j,i,k,itr,tn0)
+           enddo
+         enddo
+       enddo
+@@ -1890,7 +1889,7 @@
+            ! edge%buf(1,1,kptr+k,desc%putmapP_ghost(l))=v(1,1 ,k)
+           do i=1,nhc
+             do j=1,nhc
+-              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(i  ,j ,k,itr)
++              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(i  ,j ,k,itr,tn0)
+             enddo
+           end do
+         end do
+@@ -1907,7 +1906,7 @@
+            ! edge%buf(1,1,kptr+k,desc%putmapP_ghost(l))=v(nc ,1 ,k)
+           do i=1,nhc
+             do j=1,nhc
+-              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(npoints-i+1 ,j ,k,itr)
++              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(npoints-i+1 ,j ,k,itr,tn0)
+             enddo
+           end do
+         end do
+@@ -1924,7 +1923,7 @@
+            !edge%buf(1,1,kptr+k,desc%putmapP_ghost(l))=v(nc ,nc,k)
+            do i=1,nhc
+               do j=1,nhc
+-                 edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(npoints-i+1,npoints-j+1,k,itr)
++                 edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(npoints-i+1,npoints-j+1,k,itr,tn0)
+               enddo
+             enddo
+           end do
+@@ -1941,7 +1940,7 @@
+            !edge%buf(1,1,kptr+k,desc%putmapP_ghost(l))=v(1  ,nc,k)
+           do i=1,nhc
+             do j=1,nhc
+-              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(i  ,npoints-j+1,k,itr)
++              edge%buf(i,j,kptr+k,itr,desc%putmapP_ghost(l))=v(i  ,npoints-j+1,k,itr,tn0)
+             enddo
+           end do
+         end do
+@@ -1955,17 +1954,19 @@
+ !
+ ! Unpack the halo zone into v
+ ! ========================================
+-
+-subroutine ghostVunpack(edge,v,nhc,npoints,vlyr,ntrac,kptr,desc)
+-  use dimensions_mod, only : max_corner_elem
++! NOTE: I have to give timelevels as argument, because element_mod is not compiled first
++! and the array call has to be done in this way because of performance reasons!!!
++subroutine ghostVunpack(edge,v,nhc,npoints,vlyr,ntrac,kptr,tn0,timelevels,desc)
++  use dimensions_mod, only : max_corner_elem, ntrac_d
+   use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+   type (Ghostbuffertr_t),         intent(in)  :: edge
+ 
+   integer,               intent(in)  :: vlyr
+   integer,              intent(in)   :: ntrac
++  integer,               intent(in)  :: kptr,nhc,npoints, tn0, timelevels
+   
+-  real (kind=real_kind), intent(inout) :: v(1-nhc:npoints+nhc,1-nhc:npoints+nhc,vlyr,ntrac)
+-  integer,               intent(in)  :: kptr,nhc,npoints
++  real (kind=real_kind), intent(inout) :: v(1-nhc:npoints+nhc,1-nhc:npoints+nhc,vlyr,ntrac_d,timelevels)
++  
+   type (EdgeDescriptor_t)            :: desc
+ 
+   ! Local
+@@ -1992,10 +1993,10 @@
+     do k=1,vlyr
+       do i=1,npoints
+        do j=1,nhc
+-          v(i  ,1-j  ,k,itr)      = edge%buf(i,j,kptr+k,itr,is  )
+-          v(npoints+j ,i  ,k,itr) = edge%buf(i,j,kptr+k,itr,ie  )
+-          v(i  ,npoints+j ,k,itr) = edge%buf(i,j,kptr+k,itr,in  )
+-          v(1-j  ,i  ,k,itr)      = edge%buf(i,j,kptr+k,itr,iw  )
++          v(i  ,1-j  ,k,itr,tn0)      = edge%buf(i,j,kptr+k,itr,is  )
++          v(npoints+j ,i  ,k,itr,tn0) = edge%buf(i,j,kptr+k,itr,ie  )
++          v(i  ,npoints+j ,k,itr,tn0) = edge%buf(i,j,kptr+k,itr,in  )
++          v(1-j  ,i  ,k,itr,tn0)      = edge%buf(i,j,kptr+k,itr,iw  )
+        end do
+       end do
+     end do
+@@ -2012,7 +2013,7 @@
+               !v(0  ,0 ,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(1-j,1-i,k,itr)=edge%buf(i,j,kptr+k,itr,ic)
++                    v(1-j,1-i,k,itr,tn0)=edge%buf(i,j,kptr+k,itr,ic)
+                  enddo
+               enddo
+              enddo
+@@ -2023,7 +2024,7 @@
+               !v(0  ,0 ,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(1-j,1-i,k,itr)=edge%buf(j,i,kptr+k,itr,ic)
++                    v(1-j,1-i,k,itr,tn0)=edge%buf(j,i,kptr+k,itr,ic)
+                  enddo
+               enddo
+              enddo
+@@ -2034,7 +2035,7 @@
+          do k=1,vlyr
+            do j=1,nhc
+              do i=1,nhc
+-               v(1-i,1-j,k,itr)=NaN
++               v(1-i,1-j,k,itr,tn0)=NaN
+              enddo
+            enddo
+          enddo
+@@ -2053,7 +2054,7 @@
+               !v(nc+1 ,0 ,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(npoints+i,1-j,k,itr)=edge%buf(j,i,kptr+k,itr,ic)
++                    v(npoints+i,1-j,k,itr,tn0)=edge%buf(j,i,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2064,7 +2065,7 @@
+               !v(nc+1 ,0 ,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(npoints+i ,1-j ,k,itr)=edge%buf(i,j,kptr+k,itr,ic)
++                    v(npoints+i ,1-j ,k,itr,tn0)=edge%buf(i,j,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2075,7 +2076,7 @@
+          do k=1,vlyr
+           do j=1,nhc
+             do i=1,nhc
+-              v(npoints+i,1-j,k,itr)=NaN
++              v(npoints+i,1-j,k,itr,tn0)=NaN
+             enddo
+           enddo
+          enddo
+@@ -2094,7 +2095,7 @@
+               !v(nc+1 ,nc+1,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(npoints+i ,npoints+j,k,itr)=edge%buf(j,i,kptr+k,itr,ic)
++                    v(npoints+i ,npoints+j,k,itr,tn0)=edge%buf(j,i,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2105,7 +2106,7 @@
+               !v(nc+1 ,nc+1,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(npoints+i ,npoints+j,k,itr)=edge%buf(i,j,kptr+k,itr,ic)
++                    v(npoints+i ,npoints+j,k,itr,tn0)=edge%buf(i,j,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2116,7 +2117,7 @@
+          do k=1,vlyr        
+           do j=1,nhc
+             do i=1,nhc
+-              v(npoints+i,npoints+j,k,itr)=NaN
++              v(npoints+i,npoints+j,k,itr,tn0)=NaN
+             enddo
+           enddo
+          enddo
+@@ -2135,7 +2136,7 @@
+               !v(0  ,nc+1,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(1-i ,npoints+j,k,itr)=edge%buf(j,i,kptr+k,itr,ic)
++                    v(1-i ,npoints+j,k,itr,tn0)=edge%buf(j,i,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2146,7 +2147,7 @@
+               !v(0  ,nc+1,k)=edge%buf(1,1,kptr+k,desc%getmapP_ghost(l))
+               do j=1,nhc
+                  do i=1,nhc
+-                    v(1-i ,npoints+j,k,itr)=edge%buf(i,j,kptr+k,itr,ic)
++                    v(1-i ,npoints+j,k,itr,tn0)=edge%buf(i,j,kptr+k,itr,ic)
+                  enddo
+               enddo
+             enddo
+@@ -2157,7 +2158,7 @@
+          do k=1,vlyr
+           do j=1,nhc
+             do i=1,nhc
+-              v(1-i,npoints+j,k,itr)=NaN
++              v(1-i,npoints+j,k,itr,tn0)=NaN
+             enddo
+           enddo
+          enddo
+Index: share/element_mod.F90
+===================================================================
+--- share/element_mod.F90	(revision 2082)
++++ share/element_mod.F90	(working copy)
+@@ -19,6 +19,7 @@
+   integer, public, parameter :: timelevels=3
+ 
+ #ifdef _PRIM
++
+   type, public :: elem_state_t
+      sequence
+ !
+@@ -35,7 +36,30 @@
+      ! everything else are passive tracers that can eventually
+      ! be forced by the column model.
+      real (kind=real_kind) :: Q(np,np,nlev,qsize_d,timelevels)  ! Tracer concentration
+-     real (kind=real_kind) :: Qdp(np,np,nlev,qsize_d,timelevels)  ! Tracer mass           
++     real (kind=real_kind) :: Qdp(np,np,nlev,qsize_d,timelevels)  ! Tracer mass    
++#ifndef CAM
++!required by multicloud       
++     real (kind=real_kind) :: mask(np,np)  
++     real (kind=real_kind) :: invmask(np,np)  
++     real (kind=real_kind) :: qmc(np,np,  timelevels)
++     real (kind=real_kind) :: teb(np,np,timelevels)
++     real (kind=real_kind) :: Hs(np,np,timelevels)
++     real (kind=real_kind) :: Hc(np,np,timelevels)
++     real (kind=real_kind) :: uproj1(np,np,2,timelevels)
++     real (kind=real_kind) :: uproj2(np,np,2,timelevels)
++     real (kind=real_kind) :: ubar(np,np,2,timelevels)
++     real (kind=real_kind) :: pot0(np,np,nlev) ! This is the forcing applied to dycore
++     real (kind=real_kind) :: QHeating(np,np,nlev) ! This is the forcing applied to dycore
++     real (kind=real_kind) :: Pmc(np,np) ! This is the precipitation
++     real (kind=real_kind) :: Hd(np,np) 
++     real (kind=real_kind) :: D(np,np) 
++     real (kind=real_kind) :: w(np,np,nlev) ! Vertical velocity     
++     real (kind=real_kind) :: delthetasurf(np,np) ! This the space dependent version of TstarMinTeb
++     real (kind=real_kind)    :: mp(np,np)          ! mass matrix on pressure grid
++     real (kind=real_kind)    :: mv(np,np)          ! mass matrix on velocity grid
++     real (kind=real_kind)    :: rmv(np,np)         ! inverse mass matrix on velocity grid
++!end multicloud
++#endif
+ 
+   end type elem_state_t
+ 
+@@ -280,7 +304,9 @@
+      integer(kind=int_kind) :: LocalId
+      integer(kind=int_kind) :: GlobalId
+ 
+-     
++     real (kind=real_kind) :: dx
++     real (kind=real_kind) :: dy
++
+      !=====================================
+      !Add the link list hooks
+      !=====================================
+Index: share/global_norms_mod.F90
+===================================================================
+--- share/global_norms_mod.F90	(revision 2100)
++++ share/global_norms_mod.F90	(working copy)
+@@ -413,6 +413,22 @@
+            max_unif_dx = (111.28*30)/dble(fine_ne)
+         endif
+ 
++! 
++! note: if L = eigenvalue of metinv, then associated length scale (km) is
++! dx = 1.0d0/( sqrt(L)*0.5d0*dble(np-1)*rrearth*1000.0d0)
++!
++!       for viscosity *tensor*, we take at each point: 
++!            nu1 = nu*(dx1/max_unif_dx)**3.2      dx1 associated with eigenvalue 1
++!            nu2 = nu*(dx2/max_unif_dx)**3.2      dx2 associated with eigenvalue 2
++!       with this approach:
++!          - with this formula, no need to adjust for CFL violations
++!          - if nu comes from a 3.2 scaling that is stable for coarse and fine resolutions,
++!            this formulat will be stable.  
++!          - gives the correct answer in long skinny rectangles:
++!            large viscosity in the long direction, small viscosity in the short direction 
++!            
++!
++
+         dt = tstep
+         max_hvcourant = 0
+ 
+Index: share/physical_constants.F90
+===================================================================
+--- share/physical_constants.F90	(revision 2082)
++++ share/physical_constants.F90	(working copy)
+@@ -69,6 +69,7 @@
+   real (kind=real_kind), public, parameter :: Rd_on_Rv     = Rgas/Rwater_vapor	
+   real (kind=real_kind), public, parameter :: Cpd_on_Cpv     = Cp/Cpwater_vapor
+   real (kind=real_kind), public, parameter :: rrearth      = 1.0_real_kind/rearth         ! m
++  real (kind=real_kind), public, parameter :: Lc           = 2.5D+6 ! multicloud J/Kg
+ #endif
+ 
+ end module physical_constants
+Index: share/physics_mod.F90
+===================================================================
+--- share/physics_mod.F90	(revision 2082)
++++ share/physics_mod.F90	(working copy)
+@@ -25,6 +25,8 @@
+   public :: Vapor_Pressure
+   public :: Mixing_Ratio
+   public :: Prim_Condense
++  public :: getsurfpress
++  public :: Temp2PotTemp
+   public :: Virtual_Temperature
+   public :: Virtual_Specific_Heat
+   public :: kappastar  
+@@ -245,4 +247,33 @@
+ 
+   end subroutine Prim_Condense
+ 
+-end module physics_mod
++  function Temp2PotTemp(pr3d,t3d) result(pt3d)
++    real (kind=real_kind), parameter  :: c_p = 1004.64D0    ! Cp 
++    real (kind=real_kind), parameter  :: p_0 = 100000.0D0   ! Initial Surface pressure
++    real (kind=real_kind), parameter  :: r_d = 287.04D0      ! Gas const (dry)
++    real (kind=real_kind),intent(in) :: pr3d(np,np,nlev),t3d(np,np,nlev)
++    real (kind=real_kind)            :: pt3d(np,np,nlev)
++    integer:: i,j,k    
++    real (kind=real_kind):: rdcp,pp
++    
++    rdcp = r_d/c_p
++    do k=1,nlev
++       do j=1,np
++          do i=1,np
++             pp = (pr3d(i,j,k) + pr3d(i,j,k+1))*0.5D0
++             pt3d(i,j,k)=  t3d(i,j,k)*(p_0/pp)**rdcp 
++          enddo
++       enddo
++    enddo
++  end function Temp2PotTemp
++
++  function getsurfpress(lnps) result (press)
++    real (kind=real_kind) :: press(np,np)
++    real (kind=real_kind) :: lnps(np,np)
++
++    press(:,:) = 0.0
++    
++  end function getsurfpress
++  
++     
++  end module physics_mod
+Index: share/prim_advection_mod.F90
+===================================================================
+--- share/prim_advection_mod.F90	(revision 2082)
++++ share/prim_advection_mod.F90	(working copy)
+@@ -1265,9 +1265,8 @@
+   subroutine Prim_Advec_Tracers_cslam(elem, cslam, deriv,hvcoord,hybrid,&
+         dt,tl,nets,nete, compute_diagnostics)
+     use perf_mod, only : t_startf, t_stopf            ! _EXTERNAL
+-    use derivative_mod, only : divergence_sphere, ugradv_sphere
+     use vertremap_mod, only: remap_velocityC,remap_velocityUV  ! _EXTERNAL (actually INTERNAL)
+-    use cslam_mod, only : cslam_run, cslam_runairdensity, edgeveloc, cslam_mcgregor
++    use cslam_mod, only : cslam_run, cslam_runairdensity, edgeveloc, cslam_mcgregor, cslam_mcgregordss
+     
+     implicit none
+     type (element_t), intent(inout)   :: elem(:)
+@@ -1339,32 +1338,40 @@
+     ! elem%state%u(np1)  = velocity at time t+1 on reference levels
+     ! elem%derived%vstar = velocity at t+1 on floating levels (computed below)
+     call remap_velocityUV(np1,dt,elem,hvcoord,nets,nete)
+-    
++!------------------------------------------------------------------------------------    
++    call t_startf('cslam_mcgregor')
+     ! using McGregor AMS 1993 scheme: Economical Determination of Departure Points for
+     ! Semi-Lagrangian Models 
+-    do ie=nets,nete
+-      do k=1,nlev
+-        vstar=elem(ie)%derived%vstar(:,:,:,k) ! it is already velocity at t+1/2
+-        vhat=(cslam(ie)%vn0(:,:,:,k) + elem(ie)%derived%vstar(:,:,:,k))/2
+-        ! calculate high order approximation
+-        call cslam_mcgregor(elem(ie), deriv, dt, vstar,1)
+-        ! apply DSS to make vstar C0
+-        elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%spheremp(:,:)*vstar(:,:,1) 
+-        elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%spheremp(:,:)*vstar(:,:,2) 
+-      enddo 
+-      call edgeVpack(edgeveloc,elem(ie)%derived%vstar(:,:,1,:),nlev,0,elem(ie)%desc)
+-      call edgeVpack(edgeveloc,elem(ie)%derived%vstar(:,:,2,:),nlev,nlev,elem(ie)%desc)
+-    enddo 
+-    call bndry_exchangeV(hybrid,edgeveloc)
+-    do ie=nets,nete
+-       call edgeVunpack(edgeveloc,elem(ie)%derived%vstar(:,:,1,:),nlev,0,elem(ie)%desc)
+-       call edgeVunpack(edgeveloc,elem(ie)%derived%vstar(:,:,2,:),nlev,nlev,elem(ie)%desc)
+-       do k=1, nlev  
+-         elem(ie)%derived%vstar(:,:,1,k)=elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%rspheremp(:,:)
+-         elem(ie)%derived%vstar(:,:,2,k)=elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%rspheremp(:,:)
+-       end do
+-    end do
++!     do ie=nets,nete
++!       do k=1,nlev
++!         vstar=elem(ie)%derived%vstar(:,:,:,k) 
++!         vhat=(cslam(ie)%vn0(:,:,:,k) + elem(ie)%derived%vstar(:,:,:,k))/2
++!         ! calculate high order approximation
++!         call cslam_mcgregor(elem(ie), deriv, dt, vhat, vstar,3)
++!         ! apply DSS to make vstar C0
++!         elem(ie)%derived%vstar(:,:,1,k) = elem(ie)%spheremp(:,:)*vstar(:,:,1) 
++!         elem(ie)%derived%vstar(:,:,2,k) = elem(ie)%spheremp(:,:)*vstar(:,:,2) 
++!       enddo 
++!       call edgeVpack(edgeveloc,elem(ie)%derived%vstar(:,:,1,:),nlev,0,elem(ie)%desc)
++!       call edgeVpack(edgeveloc,elem(ie)%derived%vstar(:,:,2,:),nlev,nlev,elem(ie)%desc)
++!     enddo 
++!     call bndry_exchangeV(hybrid,edgeveloc)
++!     do ie=nets,nete
++!        call edgeVunpack(edgeveloc,elem(ie)%derived%vstar(:,:,1,:),nlev,0,elem(ie)%desc)
++!        call edgeVunpack(edgeveloc,elem(ie)%derived%vstar(:,:,2,:),nlev,nlev,elem(ie)%desc)
++!        do k=1, nlev  
++!          elem(ie)%derived%vstar(:,:,1,k)=elem(ie)%derived%vstar(:,:,1,k)*elem(ie)%rspheremp(:,:)
++!          elem(ie)%derived%vstar(:,:,2,k)=elem(ie)%derived%vstar(:,:,2,k)*elem(ie)%rspheremp(:,:)
++!        end do
++!     end do
+ 
++    call cslam_mcgregordss(elem,cslam,nets,nete, hybrid, deriv, dt, 3)
++    call t_stopf('cslam_mcgregor')
++
++!------------------------------------------------------------------------------------    
++    
++    
++
+     ! CSLAM departure calcluation should use vstar.
+     ! from c(n0) compute c(np1): 
+     call cslam_runairdensity(elem,cslam,hybrid,deriv,dt,tl,nets,nete)
+@@ -1900,7 +1907,7 @@
+      return
+   endif
+ 
+-  call t_barrierf('sync_euler_step', hybrid%par%comm)
++!   call t_barrierf('sync_euler_step', hybrid%par%comm)
+   call t_startf('euler_step')
+ 
+ 
+Index: share/prim_driver_mod.F90
+===================================================================
+--- share/prim_driver_mod.F90	(revision 2082)
++++ share/prim_driver_mod.F90	(working copy)
+@@ -11,7 +11,7 @@
+   use hybrid_mod, only : hybrid_t
+   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
+ #ifndef CAM
+-  use column_model_mod, only : ColumnModel_t
++  use column_types_mod, only : ColumnModel_t
+   use prim_restart_mod, only : initrestartfile
+   use restart_io_mod , only : RestFile,readrestart
+ #endif
+@@ -715,7 +715,7 @@
+     ! HOMME stand alone initialization
+     ! =================================
+     tl%nstep0=2   ! This will be the first full leapfrog step
+-    call InitColumnModel(elem, cm(hybrid%ithr),hvcoord,tl,nets,nete,runtype)
++    call InitColumnModel(elem, cm(hybrid%ithr), hvcoord, hybrid, tl,nets,nete,runtype)
+ 
+     if(runtype >= 1) then 
+        ! ===========================================================
+@@ -1111,7 +1111,7 @@
+     ! ftype==1 means forcing is applied in dp_coupling.F90
+     if (ftype<=0) call ApplyCAMForcing_leapfrog(elem, hvcoord,tl%n0,tl%np1,dt,nets,nete)
+ #else
+-    call ApplyColumnModel(elem, hybrid,cm(hybrid%ithr),dt)
++    call ApplyColumnModel(elem, hybrid, hvcoord, cm(hybrid%ithr),dt)
+ #endif
+     ! measure the effects of forcing
+     if (compute_diagnostics) then
