@@ -4,14 +4,9 @@
 
 program prim_main
   ! -----------------------------------------------
-#ifdef _PRIM
   use prim_driver_mod, only : prim_init1, prim_init2, prim_finalize,&
                               prim_run_subcycle
   use hybvcoord_mod, only : hvcoord_t, hvcoord_init
-#else
-! use these for dg3d
-
-#endif
 
   ! -----------------------------------------------
   use parallel_mod, only : parallel_t, initmp, syncmp, haltmp, abortmp
@@ -35,14 +30,9 @@ program prim_main
   use fvm_control_volume_mod, only : fvm_struct
   use fvm_control_volume_mod, only : n0_fvm
   use fvm_mod, only : fvm_init3
-  use spelt_mod, only : spelt_struct
   ! -----------------------------------------------
   use common_io_mod, only:  output_dir
   ! -----------------------------------------------
-#ifdef _REFSOLN
-  use prim_state_mod, only : prim_printstate_par
-  ! -----------------------------------------------
-#endif
 
 
 #ifdef PIO_INTERP
@@ -64,11 +54,8 @@ program prim_main
 	
   implicit none
   type (element_t), pointer  :: elem(:)
-#if defined(_SPELT)
-    type (spelt_struct), pointer   :: fvm(:)
-#else
-     type (fvm_struct), pointer   :: fvm(:)    
-#endif
+  type (fvm_struct), pointer   :: fvm(:)    
+
 
   type (hybrid_t)       :: hybrid ! parallel structure for shared memory/distributed memory
   type (parallel_t)                    :: par  ! parallel structure for distributed memory programming
@@ -215,16 +202,6 @@ program prim_main
         call haltmp("Please be sure the directory exist or specify 'output_dir' in the namelist.")
      end if
   endif
-#if 0
-  this ALWAYS fails on lustre filesystems.  replaced with the check above
-  inquire( file=output_dir, exist=dir_e )
-  if ( dir_e ) then
-     if(hybrid%masterthread) print *,'Directory ',output_dir, ' does exist: initialing IO'
-  else
-     if(hybrid%masterthread) print *,'Directory ',output_dir, ' does not exist: stopping'
-     call haltmp("Please get sure the directory exist or specify one via output_dir in the namelist file.")
-  end if
-#endif
   
 
 #ifdef PIO_INTERP
@@ -275,10 +252,6 @@ program prim_main
 #else
      call prim_movie_output(elem, tl, hvcoord, hybrid, 1,nelemd, fvm)
 #endif
-
-#ifdef _REFSOLN
-     call prim_printstate_par(elem, tl,hybrid,hvcoord,nets,nete, par)
-#endif 
 
      ! ============================================================
      ! Write restart files if required 

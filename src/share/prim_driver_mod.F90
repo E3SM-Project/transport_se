@@ -16,8 +16,6 @@ module prim_driver_mod
   use restart_io_mod , only : RestFile,readrestart
   use Manager
 #endif
-  use prim_si_ref_mod, only : ref_state_t
-  use solver_mod, only : blkjac_t
   use filter_mod, only : filter_t
   use derivative_mod, only : derivative_t
   use reduction_mod, only : reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
@@ -25,9 +23,6 @@ module prim_driver_mod
 
   use fvm_mod, only : fvm_init1,fvm_init2, fvm_init3
   use fvm_control_volume_mod, only : fvm_struct
-#if defined(_SPELT)
-  use spelt_mod, only : spelt_struct, spelt_init1,spelt_init2, spelt_init3
-#endif
 
   use element_mod, only : element_t, timelevels,  allocate_element_desc
   use thread_mod, only : omp_get_num_threads
@@ -45,8 +40,6 @@ module prim_driver_mod
 #ifndef CAM
   type (ColumnModel_t), allocatable :: cm(:) ! (nthreads)
 #endif
-  type (ref_state_t)    :: refstate        ! semi-implicit vertical reference state
-  type (blkjac_t),allocatable  :: blkjac(:)  ! (nets:nete)
   type (filter_t)       :: flt             ! Filter struct for v and p grid
   type (filter_t)       :: flt_advection   ! Filter struct for v grid for advection only
   real*8  :: tot_iter
@@ -124,11 +117,7 @@ contains
 #endif
     implicit none
     type (element_t), pointer :: elem(:)
-#if defined(_SPELT)
-    type (spelt_struct), pointer   :: fvm(:)
-#else
      type (fvm_struct), pointer   :: fvm(:)
-#endif
     type (parallel_t), intent(in) :: par
     type (domain1d_t), pointer :: dom_mt(:)
     type (timelevel_t), intent(out) :: Tl
@@ -533,11 +522,7 @@ contains
     call Prim_Advec_Init1(par, n_domains)
     call diffusion_init(par)
     if (ntrac>0) then
-#if defined(_SPELT)
-      call spelt_init1(par)
-#else
       call fvm_init1(par)
-#endif
     endif
 
     ! =======================================================
@@ -597,11 +582,7 @@ contains
 #endif
 
     type (element_t), intent(inout) :: elem(:)
-#if defined(_SPELT)
-    type (spelt_struct), intent(inout)   :: fvm(:)
-#else
      type (fvm_struct), intent(inout)    :: fvm(:)
-#endif
     type (hybrid_t), intent(in) :: hybrid
 
     type (TimeLevel_t), intent(inout)    :: tl              ! time level struct
@@ -676,30 +657,11 @@ contains
     ! ==================================
     call Prim_Advec_Init2(hybrid, fvm_corners, fvm_points, spelt_refnep)
 
-    ! ================================================
-    ! fvm initialization
-    ! ================================================
-    if (ntrac>0) then
-#if defined(_SPELT)
-      call spelt_init2(elem,fvm,hybrid,nets,nete,tl)
-#else
-      call fvm_init2(elem,fvm,hybrid,nets,nete,tl)
-#endif
-    endif
     ! ====================================
     ! In the semi-implicit case:
     ! initialize vertical structure and
     ! related matrices..
     ! ====================================
-#if (defined HORIZ_OPENMP)
-!$OMP MASTER
-#endif
-    if (integration == "semi_imp") then
-       refstate = prim_si_refstate_init(.false.,hybrid%masterthread,hvcoord)
-    endif
-#if (defined HORIZ_OPENMP)
-!$OMP END MASTER
-#endif
     ! ==========================================
     ! Initialize pressure and velocity grid
     ! filter matrix...
@@ -982,8 +944,6 @@ contains
     use time_mod, only : TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
     use control_mod, only: statefreq,&
            energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
-    use prim_advance_mod, only : applycamforcing, &
-                                 applycamforcing_dynamics
     use prim_state_mod, only : prim_printstate, prim_diag_scalars, prim_energy_halftimes
     use parallel_mod, only : abortmp
     use reduction_mod, only : parallelmax
@@ -996,11 +956,8 @@ contains
 
     type (element_t) , intent(inout)        :: elem(:)
 
-#if defined(_SPELT)
-      type(spelt_struct), intent(inout) :: fvm(:)
-#else
-      type(fvm_struct), intent(inout) :: fvm(:)
-#endif
+    type(fvm_struct), intent(inout) :: fvm(:)
+
     type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
 
     type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
@@ -1025,10 +982,6 @@ contains
     dt_q = dt*qsplit
     dt_remap = dt_q
     nstep_end = tl%nstep + qsplit
-    if (rsplit>0) then
-       dt_remap=dt_q*rsplit   ! rsplit=0 means use eulerian code, not vert. lagrange
-       nstep_end = tl%nstep + qsplit*rsplit  ! nstep at end of this routine
-    endif
 
 
 
@@ -1037,7 +990,7 @@ contains
     compute_diagnostics=.false.
     compute_energy=energy_fixer > 0
 
-    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0) then
+    if (MODULO(nstep_end,statefreq)==0 .or. nstep_end==tl%nstep0 .or. tl%nstep==0) then
        compute_diagnostics=.true.
        compute_energy = .true.
     endif
@@ -1049,61 +1002,23 @@ contains
 
 
 
-#ifdef CAM
-    ! ftype=2  Q was adjusted by physics, but apply u,T forcing here
-    ! ftype=1  forcing was applied time-split in CAM coupling layer
-    ! ftype=0 means forcing apply here
-    ! ftype=-1 do not apply forcing
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp)
-    if (ftype==0) then
-      call ApplyCAMForcing(elem, fvm, hvcoord,tl%n0,n0_qdp, dt_remap,nets,nete)
-    end if
-    if (ftype==2) call ApplyCAMForcing_dynamics(elem, hvcoord,tl%n0,dt_remap,nets,nete)
-#endif
-
     ! E(1) Energy after CAM forcing
     if (compute_energy) call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
 
     ! qmass and variance, using Q(n0),Qdp(n0)
     if (compute_diagnostics) call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
 
-    ! initialize dp3d from ps
-    if (rsplit>0) then
-    do ie=nets,nete
-       do k=1,nlev
-          elem(ie)%state%dp3d(:,:,k,tl%n0)=&
-               ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-               ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,tl%n0)
-       enddo
-       ! DEBUGDP step: ps_v should not be used for rsplit>0 code during prim_step
-       ! vertical_remap.  so to this for debugging:
-!       elem(ie)%state%ps_v(:,:,tl%n0)=-9e9 !outcommented so the pre_scribed winds work with rsplit>0
-    enddo
-    endif
 
 #if USE_CUDA_FORTRAN
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call copy_qdp_h2d( elem , n0_qdp )
 #endif
 
-    ! loop over rsplit vertically lagrangian timesteps
+    ! take a timestep of trancers and dynamis
     call prim_step(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
-    do r=2,rsplit
-       call TimeLevel_update(tl,"leapfrog")
-       call prim_step(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord,.false.,r)
-    enddo
-    ! defer final timelevel update until after remap and diagnostics
-
-
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !
-    !  apply vertical remap
-    !  always for tracers
-    !  if rsplit>0:  also remap dynamics and compute reference level ps_v
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !compute timelevels for tracers (no longer the same as dynamics)
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
-    ! note: time level update for fvm tracers takes place in fvm_mod
+
+    ! vertical remap
     call vertical_remap(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
 
 #if USE_CUDA_FORTRAN
@@ -1202,12 +1117,9 @@ contains
     use fvm_mod,     only : fvm_ideal_test, IDEAL_TEST_OFF, IDEAL_TEST_ANALYTICAL_WINDS
     use fvm_mod,     only : fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
     use fvm_bsp_mod, only : get_boomerang_velocities_gll, get_solidbody_velocities_gll
-    use prim_advance_mod, only : prim_advance_exp, overwrite_SEdensity
-    use prim_advection_mod, only : prim_advec_tracers_remap, prim_advec_tracers_fvm, deriv
+    use prim_advance_mod, only : prim_advance_exp
+    use prim_advection_mod, only : prim_advec_tracers_remap, deriv
     use derivative_mod, only : subcell_integration
-#if defined(_SPELT)
-    use prim_advection_mod, only : prim_advec_tracers_spelt
-#endif
     use parallel_mod, only : abortmp
     use reduction_mod, only : parallelmax
     use derivative_mod, only : interpolate_gll2spelt_points
@@ -1216,11 +1128,7 @@ contains
 
     type (element_t) , intent(inout)        :: elem(:)
 
-#if defined(_SPELT)
-      type(spelt_struct), intent(inout) :: fvm(:)
-#else
-      type(fvm_struct), intent(inout) :: fvm(:)
-#endif
+    type(fvm_struct), intent(inout) :: fvm(:)
     type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
 
     type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
@@ -1258,7 +1166,6 @@ contains
          elem(ie)%derived%dpdiss_biharmonic=0
       endif
 
-      if (rsplit==0) then
         ! save dp at time t for use in tracers
 #if (defined COLUMN_OPENMP)
 !$omp parallel do default(shared), private(k)
@@ -1268,10 +1175,6 @@ contains
                  ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,tl%n0)
          enddo
-      else
-         ! dp at time t:  use floating lagrangian levels:
-         elem(ie)%derived%dp(:,:,:)=elem(ie)%state%dp3d(:,:,:,tl%n0)
-      endif
     enddo
 
     ! ===============
@@ -1283,10 +1186,8 @@ contains
     ! ===============
     ! advance tracers
     ! ===============
-    if (qsize > 0) then
-      call Prim_Advec_Tracers_remap(elem, deriv(hybrid%ithr),hvcoord,flt_advection,hybrid,&
-           dt_q,tl,nets,nete)
-    end if
+    call Prim_Advec_Tracers_remap(elem, deriv(hybrid%ithr),hvcoord,flt_advection,hybrid,&
+         dt_q,tl,nets,nete)
 
 
   end subroutine prim_step
@@ -1298,16 +1199,6 @@ contains
   subroutine prim_finalize(hybrid)
     type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
 
-#ifdef TRILINOS
-  interface
-    subroutine noxfinish() bind(C,name='noxfinish')
-    use ,intrinsic :: iso_c_binding
-    end subroutine noxfinish
-  end interface
-
-  call noxfinish()
-
-#endif
 
     ! ==========================
     ! end of the hybrid program

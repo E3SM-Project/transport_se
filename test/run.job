@@ -12,7 +12,7 @@
 #   3.  Run this script.  If there is no executable, it will attempt to 
 #       run 'cmake' to configure the model.  This only needs to be done once
 #   4.  It will then attempt to compile the model.  
-#   5.  It will then attempt to run the model using 'mpirun -np $NCPUS'
+#   5.  It will then attempt to run the model using 'mpirun -np $NCPU'
 #   
 #
 #######################################################################
@@ -23,11 +23,11 @@ set wdir = ~/scratch1/transport_se   # directory for building and running
 set MACH = $HOMME/cmake/machineFiles/redsky.cmake # machine specific CMAKE settings:
 
 set NCPU = 2                         # number of CPUS to use
-set NTHREADS = 4                     # number of openMP threads
+set NTHREADS = 1                     # number of openMP threads
 
 # set resolution
 set nlev = 64     # number of vertical layers (dont change)
-set NE = 8        # horizontal resolution   NE=8 is 4 degree (ultra-low-res).  NE=120 is 1/4 degree
+set NE = 8       # horizontal resolution   NE=8 is 4 degree (ultra-low-res).  NE=120 is 1/4 degree
 set qsize = 4     # number of tracers.  Might be reduced for ACME v1
 
 
@@ -73,7 +73,13 @@ if ($status) exit
 if ( $NE == 8 ) then
    # 3.75 degree    
    set tstep = 1440  
+   set tstep = 10
    set nu = 2e16
+endif
+if ( $NE == 30 ) then
+   # 3.75 degree    
+   set tstep = 300
+   set nu = 1e15
 endif
 # ACME target resolution.  
 if ( $NE == 120 ) then
@@ -83,6 +89,8 @@ if ( $NE == 120 ) then
 endif
 
 
+#set nu = 0
+
 
 # number of hours between calls to prim_printstate
 set sfreq = 12
@@ -90,7 +98,7 @@ set sfreq = 12
 @ sfreq /= $tstep
 if ( $sfreq == 0 ) set sfreq = 1
 
-
+set sfreq = 20
 set name = run
 
 # create working directory
