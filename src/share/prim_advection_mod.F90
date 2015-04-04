@@ -217,30 +217,17 @@ end subroutine remap_Q_ppm
 !=======================================================================================================!
 
 
-!THis compute grid-based coefficients from Collela & Woodward 1984.
+!This computes grid-based coefficients from Collela & Woodward 1984.
 function compute_ppm_grids( dx )   result(rslt)
   use control_mod, only: vert_remap_q_alg
   implicit none
   real(kind=real_kind), intent(in) :: dx(-1:nlev+2)  !grid spacings
   real(kind=real_kind)             :: rslt(10,0:nlev+1)  !grid spacings
-  integer :: j
-  integer :: indB, indE
+  real(kind=real_kind) :: l, c, r, rr
+  integer :: j, indB, indE
 
-  !Calculate grid-based coefficients for stage 1 of compute_ppm
-  if (vert_remap_q_alg == 2) then
-    indB = 2
-    indE = nlev-1
-  else
-    indB = 0
-    indE = nlev+1
-  endif
-  do j = indB , indE
-    rslt( 1,j) = dx(j) / ( dx(j-1) + dx(j) + dx(j+1) )
-    rslt( 2,j) = ( 2.*dx(j-1) + dx(j) ) / ( dx(j+1) + dx(j) )
-    rslt( 3,j) = ( dx(j) + 2.*dx(j+1) ) / ( dx(j-1) + dx(j) )
-  enddo
-
-  !Caculate grid-based coefficients for stage 2 of compute_ppm
+  call t_startf('compute_ppm_grids')
+  !Calculate grid-based coefficients for stage 1 (1--3) and stage 2 (4--10) of compute_ppm
   if (vert_remap_q_alg == 2) then
     indB = 2
     indE = nlev-2
@@ -249,14 +236,26 @@ function compute_ppm_grids( dx )   result(rslt)
     indE = nlev
   endif
   do j = indB , indE
-    rslt( 4,j) = dx(j) / ( dx(j) + dx(j+1) )
-    rslt( 5,j) = 1. / sum( dx(j-1:j+2) )
-    rslt( 6,j) = ( 2. * dx(j+1) * dx(j) ) / ( dx(j) + dx(j+1 ) )
-    rslt( 7,j) = ( dx(j-1) + dx(j  ) ) / ( 2. * dx(j  ) + dx(j+1) )
-    rslt( 8,j) = ( dx(j+2) + dx(j+1) ) / ( 2. * dx(j+1) + dx(j  ) )
-    rslt( 9,j) = dx(j  ) * ( dx(j-1) + dx(j  ) ) / ( 2.*dx(j  ) +    dx(j+1) )
-    rslt(10,j) = dx(j+1) * ( dx(j+1) + dx(j+2) ) / (    dx(j  ) + 2.*dx(j+1) )
+    c = dx(j)
+    l = dx(j-1)
+    r = dx(j+1)
+    rr = dx(j+2)
+    rslt( 1,j) = c / ( l + c + r )
+    rslt( 2,j) = ( 2.*l + c ) / ( c + r )
+    rslt( 3,j) = ( 2.*r + c ) / ( c + l )
+    rslt( 4,j) = c / ( c + r )
+    rslt( 5,j) = 1. / ( l + c + r + rr )
+    rslt( 6,j) = ( 2. * c * r ) / ( c + r )
+    rslt( 7,j) = ( c  + l ) / ( 2.*c + r )
+    rslt( 8,j) = ( rr + r ) / ( 2.*c + r )
+    rslt( 9,j) = c * ( l + c ) / ( 2.*c + r )
+    rslt(10,j) = r * ( r + rr ) / ( c + 2.*r )
   enddo
+  !Calculate grid-based coefficients for stage 1 of compute_ppm
+  rslt( 1,j+1) = dx(j+1) / ( dx(j) + dx(j+1) + dx(j+2) )
+  rslt( 2,j+1) = ( 2.*dx(j  ) + dx(j+1) ) / ( dx(j+2) + dx(j+1) )
+  rslt( 3,j+1) = ( 2.*dx(j+2) + dx(j+1) ) / ( dx(j  ) + dx(j+1) )
+  call t_stopf('compute_ppm_grids')
 end function compute_ppm_grids
 
 !=======================================================================================================!
@@ -274,11 +273,11 @@ function compute_ppm( a , dx )    result(coefs)
   real(kind=real_kind) :: dma(0:nlev+1)                     !An expression from Collela's '84 publication
   real(kind=real_kind) :: da                                !Ditto
   ! Hold expressions based on the grid (which are cumbersome).
-  real(kind=real_kind) :: dx1, dx2, dx3, dx4, dx5, dx6, dx7, dx8, dx9, dx10
   real(kind=real_kind) :: al, ar                            !Left and right interface values for cell-local limiting
-  integer :: j
-  integer :: indB, indE
+  real(kind=real_kind) :: c, rc, cl
+  integer :: j, indB, indE
 
+  call t_startf('compute_ppm')
   ! Stage 1: Compute dma for each cell, allowing a 1-cell ghost stencil below and above the domain
   if (vert_remap_q_alg == 2) then
     indB = 2
@@ -288,9 +287,11 @@ function compute_ppm( a , dx )    result(coefs)
     indE = nlev+1
   endif
   do j = indB , indE
-    da = dx(1,j) * ( dx(2,j) * ( a(j+1) - a(j) ) + dx(3,j) * ( a(j) - a(j-1) ) )
-    dma(j) = minval( (/ abs(da) , 2. * abs( a(j) - a(j-1) ) , 2. * abs( a(j+1) - a(j) ) /) ) * sign(1.D0,da)
-    if ( ( a(j+1) - a(j) ) * ( a(j) - a(j-1) ) <= 0. ) dma(j) = 0.
+    rc = a(j+1) - a(j)
+    cl = a(j  ) - a(j-1)
+    da = dx(1,j) * ( dx(2,j) * rc + dx(3,j) * cl )
+    dma(j) = minval( (/ abs(da) , 2. * abs( cl ) , 2. * abs( rc ) /) ) * sign(1.D0,da)
+    if ( rc * cl <= 0. ) dma(j) = 0.
   enddo
 
   ! Stage 2: Compute ai for each cell interface in the physical domain (dimension nlev+1)
@@ -302,8 +303,9 @@ function compute_ppm( a , dx )    result(coefs)
     indE = nlev
   endif
   do j = indB , indE
-    ai(j) = a(j) + dx(4,j) * ( a(j+1) - a(j) ) + dx(5,j) * ( dx(6,j) * ( dx(7,j) - dx(8,j) ) &
-         * ( a(j+1) - a(j) ) - dx(9,j) * dma(j+1) + dx(10,j) * dma(j) )
+    rc = a(j+1) - a(j)
+    ai(j) = a(j) + dx(4,j) * rc + dx(5,j) * ( dx(6,j) * ( dx(7,j) - dx(8,j) ) * rc &
+         - dx(9,j) * dma(j+1) + dx(10,j) * dma(j) )
   enddo
 
   ! Stage 3: Compute limited PPM interpolant over each cell in the physical domain
@@ -318,14 +320,15 @@ function compute_ppm( a , dx )    result(coefs)
   do j = indB , indE
     al = ai(j-1)
     ar = ai(j  )
-    if ( (ar - a(j)) * (a(j) - al) <= 0. ) then
-      al = a(j)
-      ar = a(j)
+    c  = a(j)
+    if ( (ar - c) * (c - al) <= 0. ) then
+      al = c
+      ar = c
     endif
-    if ( (ar - al) * (a(j) - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.*a(j) - 2. * ar
-    if ( (ar - al) * (a(j) - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.*a(j) - 2. * al
+    if ( (ar - al) * (c - (al + ar)/2.) >  (ar - al)**2/6. ) al = 3.*c - 2. * ar
+    if ( (ar - al) * (c - (al + ar)/2.) < -(ar - al)**2/6. ) ar = 3.*c - 2. * al
     !Computed these coefficients from the edge values and cell mean in Maple. Assumes normalized coordinates: xi=(x-x0)/dx
-    coefs(0,j) = 1.5 * a(j) - ( al + ar ) / 4.
+    coefs(0,j) = 1.5 * c - ( al + ar ) / 4.
     coefs(1,j) = ar - al
     coefs(2,j) = -6. * a(j) + 3. * ( al + ar )
   enddo
@@ -339,6 +342,7 @@ function compute_ppm( a , dx )    result(coefs)
     coefs(0,nlev-1:nlev) = a(nlev-1:nlev)
     coefs(1:2,nlev-1:nlev) = 0.D0
   endif
+  call t_stopf('compute_ppm')
 end function compute_ppm
 
 !=======================================================================================================!
