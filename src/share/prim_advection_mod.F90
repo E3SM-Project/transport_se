@@ -1324,20 +1324,27 @@ contains
 
      ! prescribed wind case: density was not updated by dynamics.  
      ! lets use the density from the tracer scheme:
+!$omp parallel
+!$omp do
      do k = 1 , nlev    
         elem(ie)%state%dp3d(:,:,k,np1)=&
         elem(ie)%derived%dp(:,:,k) - dt*elem(ie)%derived%divdp_proj(:,:,k)
+        dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
       enddo
-
+!$omp end do
+!$omp single
+      if (minval(dp_star)<0) call abortmp('negative layer thickness.  timestep or remap time too large')
       ! compute surface pressure for new levels
       elem(ie)%state%ps_v(:,:,np1) = hvcoord%hyai(1)*hvcoord%ps0 + &
            sum(elem(ie)%state%dp3d(:,:,:,np1),3)
+!$omp end single
+!$omp do
       do k=1,nlev
          dp(:,:,k) = ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
-              ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
-         dp_star(:,:,k) = elem(ie)%state%dp3d(:,:,k,np1)
+                     ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,np1)
       enddo
-      if (minval(dp_star)<0) call abortmp('negative layer thickness.  timestep or remap time too large')
+!$omp end do nowait
+!$omp end parallel
       
       ! remap the gll tracers from lagrangian levels (dp_star)  to REF levels dp
       call remap_q_ppm(elem(ie)%state%Qdp(:,:,:,:,np1_qdp),np,qsize,dp_star,dp)
