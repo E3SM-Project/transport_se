@@ -26,6 +26,7 @@ module prim_driver_mod
 
   use element_mod, only : element_t, timelevels,  allocate_element_desc
   use thread_mod, only : omp_get_num_threads
+  use perf_mod, only : t_startf, t_stopf
   implicit none
   private
   public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
@@ -1151,6 +1152,7 @@ contains
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics
 
+    call t_startf('prim_step')
     dt_q = dt*qsplit
  
     ! ===============
@@ -1175,6 +1177,9 @@ contains
                  ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,tl%n0)
          enddo
+#if (defined COLUMN_OPENMP)
+!$omp end parallel do
+#endif
     enddo
 
     ! ===============
@@ -1190,6 +1195,7 @@ contains
          dt_q,tl,nets,nete)
 
 
+    call t_stopf('prim_step')
   end subroutine prim_step
 
 
