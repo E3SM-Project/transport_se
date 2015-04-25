@@ -18,9 +18,9 @@
 #######################################################################
 # user set parameters
 #######################################################################
-set HOMME = ~/codes/transport_se     # location of HOMME source code and test cases
-set wdir = ~/scratch1/transport_se   # directory for building and running
-set MACH = $HOMME/cmake/machineFiles/redsky.cmake # machine specific CMAKE settings:
+set HOMME = ~/repos/transport_se     # location of HOMME source code and test cases
+set wdir = ~/repos/transport_se/wdir   # directory for building and running
+set MACH = $HOMME/cmake/machineFiles/mira.cmake # machine specific CMAKE settings:
 
 set NCPU = 2                         # number of CPUS to use
 set NTHREADS = 1                     # number of openMP threads
@@ -123,7 +123,7 @@ sed s/NU1/$nu/   > $wdir/input.nl
 cd $wdir
 setenv OMP_NUM_THREADS $NTHREADS
 date
-mpirun -np $NCPU  $exe  <  input.nl
+qsub -n $NCPU -t 10 -i input.nl $exe
 date
 
 exit
