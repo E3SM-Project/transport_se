@@ -12,13 +12,13 @@ SET (CMAKE_CXX_COMPILER mpicc CACHE FILEPATH "")
 
 SET (CMAKE_Fortran_FLAGS "-WF,-C! -O2 -Ipreqx_modules" CACHE STRING "")
 #SET (FORCE_Fortran_FLAGS "-WF,-C!" CACHE STRING "")
-SET (ENABLE_OPENMP FALSE CACHE BOOL "")
+SET (ENABLE_OPENMP TRUE CACHE BOOL "")
 
 
 #SET (WITH_PNETCDF FALSE CACHE FILEPATH "")
-SET (PNETCDF_DIR /soft/libraries/pnetcdf/1.3.1/cnk-xl/current CACHE FILEPATH "")
-SET (NETCDF_DIR /soft/libraries/netcdf/4.2.1.1/cnk-xl/V1R2M0-20130417 CACHE FILEPATH "")
-SET (HDF5_DIR /soft/libraries/hdf5/1.8.10/cnk-xl/current CACHE FILEPATH "")
+SET (PNETCDF_DIR /soft/libraries/pnetcdf/current/cnk-xl/current CACHE FILEPATH "")
+SET (NETCDF_DIR /soft/libraries/netcdf/current/cnk-xl/current CACHE FILEPATH "")
+SET (HDF5_DIR /soft/libraries/hdf5/current/cnk-xl/current CACHE FILEPATH "")
 SET (ZLIB_DIR /soft/libraries/alcf/current/xl/ZLIB CACHE FILEPATH "")
 
 SET (USE_QUEUING FALSE CACHE BOOL "")
