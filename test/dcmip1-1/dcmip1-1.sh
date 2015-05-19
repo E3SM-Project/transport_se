@@ -22,10 +22,10 @@ set QSIZE=4                                       # max number of tracers
 set NLEV=64                                       # number of vertical levels
 
 set NE=8                                          # number of elements per cube-edge
-set NCPU=2                                        # number of CPUs to use
+set NCPU=8                                        # number of CPUs to use
 set NTHREADS=1                                    # number of openMP threads
 
-module load cmake netcdf hdf5
+module load cmake netcdf hdf5                     # load required modules
 
 #_______________________________________________________________________
 # script derived parameters
@@ -33,26 +33,33 @@ module load cmake netcdf hdf5
 set BLD       = $WORK/bld               # build directory
 set RUN_DIR   = $WORK/run               # run directory
 set EXE       = $BLD/src/preqx/preqx    # location of executable
-set TEST_DIR  = $REPO/test/             # test case directory
-set VCOORD    = $TEST_DIR/vcoord        # location of vertical coordinate files
+set TEST_DIR  = $BLD/test/dcmip1-1     # test case directory
+set VCOORD    = $REPO/test/vcoord       # location of vertical coordinate files
 
 #_______________________________________________________________________
 # configure the build
 
 if ( -f $EXE  ) then
   echo "Found executable.  Assuming configuration was already successful"
+  mkdir -p $BLD
+  cd $BLD
 
 else
   echo "running CMAKE to configure the model"
-  mkdir -p $BLD
-  cd $BLD
-  rm -rf CMakeFiles CMakeCache.txt src
+   rm -rf CMakeFiles CMakeCache.txt src
+
+  # Add these flags to the cmake command for a debug configuration
+  # -DCMAKE_BUILD_TYPE=Debug \
+  # -DCMAKE_Fortran_FLAGS_DEBUG="-g -O0 -fbounds-check" \
+
+  # For interpolated output: -DPREQX_USE_PIO=FALSE      \
+  # For native grid output:  -DPREQX_USE_PIO=TRUE       \
 
   cmake -C $MACH                \
    -DQSIZE_D=$QSIZE             \
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
-   -DPREQX_USE_PIO=TRUE         \
+   -DPREQX_USE_PIO=FALSE         \
    -DBUILD_HOMME_SWDGX=FALSE    \
    -DBUILD_HOMME_SWEQX=FALSE    \
    -DBUILD_HOMME_PRIMDGX=FALSE  \
@@ -107,9 +114,10 @@ echo
 
 cd $TEST_DIR
 sed s/NE.\*/$NE/ dcmip1-1.nl          |\
+sed s/TIME_STEP.\*/$TSTEP/            |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/input.nl
+sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
 
 #_______________________________________________________________________
 # launch the executable
@@ -118,9 +126,9 @@ cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
 date
 
-# runjob -np $NCPU $EXE < input.nl
-# mpirun -np $NCPU $EXE < input.nl
-aprun  -n  $NCPU $EXE < input.nl
+# runjob -np $NCPU $EXE < dcmip1-1.nl
+# mpirun -np $NCPU $EXE < dcmip1-1.nl
+  aprun  -n  $NCPU $EXE < dcmip1-1.nl
 
 date
 exit

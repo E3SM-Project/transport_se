@@ -113,8 +113,9 @@ SET(PREQX_SRCS_F90
   ${SRC_SHARE_DIR}/Manager.F90
   ${SRC_DIR}/prim_main.F90 
   ${SRC_DIR}/ref_state_mod.F90 
+  ${SRC_SHARE_DIR}/dcmip_123_mod.F90
+  ${SRC_SHARE_DIR}/dcmip_wrapper_mod.F90
 )
-
 
 SET(PREQX_SRCS_C
   ${UTILS_SHARE_DIR}/shr_vmath_fwrap.c
