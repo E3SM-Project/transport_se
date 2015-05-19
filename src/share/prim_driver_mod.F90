@@ -575,6 +575,7 @@ contains
     use baroclinic_inst_mod, only : binst_init_state, jw_baroclinic
     use asp_tests, only : asp_tracer, asp_baroclinic, asp_rossby, asp_mountain, asp_gravity_wave, dcmip2_schar
     use aquaplanet, only : aquaplanet_init_state
+    use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
 #endif
     use fvm_control_volume_mod, only : n0_fvm, np1_fvm
 #if USE_CUDA_FORTRAN
@@ -756,7 +757,20 @@ contains
        ! ========================================================
        ! Initialize the test cases
        ! ========================================================
-       if (test_case(1:10) == "baroclinic") then
+
+       if(test_case(1:8)=="dcmip1-1") then
+          if (hybrid%masterthread) then
+            print *,"initializing DCMIP test 1-1: 3d deformational flow"
+          endif
+          call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%n0,time=0.0d0)
+
+       else if(test_case(1:8)=="dcmip1-2") then
+          if (hybrid%masterthread) then
+            print *,"initializing DCMIP test 1-2: Hadley-like circulation"
+          endif
+          call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%n0,time=0.0d0)
+
+       else if (test_case(1:10) == "baroclinic") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing Polvani-Scott-Thomas baroclinic instability test'
           end if

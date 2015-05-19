@@ -642,6 +642,7 @@ module namelist_mod
 #ifdef _PRIM
        write(iulog,*)"reading physics namelist..."
        if (test_case=="held_suarez0" .or. &
+           test_case(1:5)=="dcmip" .or. &
            test_case(1:10)=="baroclinic" .or. &
            test_case(1:13)=="jw_baroclinic" .or. &
            test_case(1:12)=="dcmip2_schar" .or. &

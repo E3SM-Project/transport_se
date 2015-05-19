@@ -1,0 +1,4 @@
+ADD_SUBDIRECTORY(dcmip1-1)
+ADD_SUBDIRECTORY(dcmip1-2)
+
+

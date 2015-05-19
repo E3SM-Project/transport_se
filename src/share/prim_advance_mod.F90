@@ -68,7 +68,7 @@ contains
   subroutine prim_advance_exp(elem, deriv, hvcoord, hybrid,&
        dt, tl,  nets, nete, compute_diagnostics)
     use bndry_mod, only : bndry_exchangev
-    use control_mod, only : prescribed_wind, qsplit, tstep_type, rsplit, qsplit, moisture, integration
+    use control_mod, only : prescribed_wind, qsplit, tstep_type, rsplit, qsplit, moisture, integration, test_case
     use derivative_mod, only : derivative_t, vorticity, divergence, gradient, gradient_wk
     use dimensions_mod, only : np, nlev, nlevp, nvar, nc
 !    use prim_state_mod, only : prim_printstate
@@ -79,6 +79,8 @@ contains
     use reduction_mod, only : reductionbuffer_ordered_1d_t
     use time_mod, only : TimeLevel_t,  timelevel_qdp, tevolve
     use diffusion_mod, only :  prim_diffusion
+    use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
+
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
@@ -177,25 +179,38 @@ contains
        method = tstep_type                ! other RK variants
     endif
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
     ! fix dynamical variables, skip dynamics
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
     if (1==prescribed_wind) then
-       time=tl%nstep*dt
-       do ie=nets,nete
+      time=tl%nstep*dt
 
-          ! velocity and temperature are held constant in time
-          elem(ie)%state%T(:,:,:,np1)   = elem(ie)%state%T(:,:,:,n0)
-          elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,n0)
+      if(test_case(1:8)=="dcmip1-1") then
+        call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,time)
+
+      else if(test_case(1:8)=="dcmip1-2") then
+        call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,time)
+
+      else
+          ! Apply constant temperature and velocity fields
+         do ie=nets,nete
+            ! velocity and temperature are held constant in time
+            elem(ie)%state%T(:,:,:,np1)   = elem(ie)%state%T(:,:,:,n0)
+            elem(ie)%state%v(:,:,:,:,np1) = elem(ie)%state%v(:,:,:,:,n0)
+         end do
+      endif
+
+      do ie=nets,nete
 
           ! accumulate mean velocity
           do k=1,nlev
-             elem(ie)%derived%vn0(:,:,1,k)=elem(ie)%derived%vn0(:,:,1,k)+&
-                  eta_ave_w*elem(ie)%state%v(:,:,1,k,n0)*elem(ie)%derived%dp(:,:,k) 
-             elem(ie)%derived%vn0(:,:,2,k)=elem(ie)%derived%vn0(:,:,2,k)+&
-                  eta_ave_w*elem(ie)%state%v(:,:,2,k,n0)*elem(ie)%derived%dp(:,:,k) 
+          elem(ie)%derived%vn0(:,:,1,k)=elem(ie)%derived%vn0(:,:,1,k)+&
+            eta_ave_w*elem(ie)%state%v(:,:,1,k,n0)*elem(ie)%derived%dp(:,:,k)
+          elem(ie)%derived%vn0(:,:,2,k)=elem(ie)%derived%vn0(:,:,2,k)+&
+            eta_ave_w*elem(ie)%state%v(:,:,2,k,n0)*elem(ie)%derived%dp(:,:,k)
           enddo
-       end do
+        end do
+
     endif
 
 

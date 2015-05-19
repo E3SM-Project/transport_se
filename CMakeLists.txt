@@ -12,6 +12,8 @@ IF (${HOMME_USE_CTEST})
   INCLUDE(CTest)
 ENDIF ()
 
+ADD_SUBDIRECTORY(test)
+
 # For testing
 ENABLE_TESTING()
 
@@ -159,16 +161,15 @@ IF (HDF5_DIR)
 ENDIF ()
 ADD_SUBDIRECTORY(utils/pio)
 
-
 ADD_SUBDIRECTORY(utils/timing)
 
 IF(${BUILD_HOMME_PREQX})
   ADD_SUBDIRECTORY(src/preqx)
 ENDIF()
 
-
 # Create a "make clean-all" target to delete CMake cache and the cprnc build
 ADD_CUSTOM_TARGET(clean-all
    COMMAND ${CMAKE_BUILD_TOOL} clean
    COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/clean-cmake-files.cmake"
 )
+
