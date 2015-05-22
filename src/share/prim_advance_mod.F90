@@ -186,10 +186,10 @@ contains
       time=tl%nstep*dt
 
       if(test_case(1:8)=="dcmip1-1") then
-        call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,time)
+        call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,tl,time)
 
       else if(test_case(1:8)=="dcmip1-2") then
-        call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,time)
+        call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,tl,time)
 
       else
           ! Apply constant temperature and velocity fields

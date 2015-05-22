@@ -16,7 +16,7 @@ use dimensions_mod, only: np, nlev, qsize, nlevp, qsize_d, nelemd
 use control_mod,    only: test_case
 use hybrid_mod,     only: hybrid_t
 use hybvcoord_mod,  only: hvcoord_t
-use derivative_mod, only: derivative_t
+use time_mod,       only: timelevel_t
 use element_mod,    only: element_t, elem_state_t, nt=>timelevels, derived_state_t
 use dcmip_123_mod,  only: test1_advection_deformation, test1_advection_hadley
 use physical_constants, only: p0, g, Rd=>Rgas
@@ -49,7 +49,7 @@ integer  :: ie,i,j,k                  ! loop indices
 CONTAINS
 
 !_______________________________________________________________________
-subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
+subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
   ! Wrapper for DCMIP 1-1: 3D Deformational Flow
 
@@ -57,12 +57,11 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
   type(hybrid_t),     intent(in)            :: hybrid
   type(hvcoord_t),    intent(inout)         :: hvcoord
   integer,            intent(in)            :: nets, nete
-  integer,            intent(in)            :: n0                       ! index of time level tl%n0
+  integer,            intent(in)            :: n0
+  type (timelevel_t), intent(in)            :: tl                       ! time-level structure
   real(rl),           intent(in)            :: time                     ! simulation time in seconds
 
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
-
-  !if (hybrid%masterthread) print *,"n0=",n0," time=",time
 
   do ie= nets, nete
 
@@ -95,10 +94,12 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
 
   enddo!ie
 
+  !call collect_tracer_statistics(elem,hybrid,tl,time,nets,nete)
+
 end subroutine
 
 !_______________________________________________________________________
-subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
+subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
   ! Wrapper for DCMIP 1-2: Hadley-like Flow
 
@@ -106,12 +107,11 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
   type(hybrid_t),     intent(in)            :: hybrid
   type(hvcoord_t),    intent(inout)         :: hvcoord
   integer,            intent(in)            :: nets, nete
-  integer,            intent(in)            :: n0                       ! index of time level tl%n0
+  integer,            intent(in)            :: n0
+  type (timelevel_t), intent(in)            :: tl                       ! time-level structure
   real(rl),           intent(in)            :: time                     ! simulation time in seconds
 
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
-
-  if (hybrid%masterthread) print *,"n0=",n0," time=",time
 
   do ie= nets, nete
 
@@ -143,6 +143,8 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, time)
     call set_element_state(elem(ie),hvcoord,n0,time)
 
   enddo!ie
+
+  !call collect_tracer_statistics(elem,hybrid,tl,time,nets,nete)
 
 end subroutine
 
@@ -217,6 +219,53 @@ real(rl)  :: p,phis,rho,w
 p_i(i,j,k) = p
 phi_s(i,j) = phis
 eta_dot_dpdn(i,j,k) = -g*rho*w
+
+end subroutine
+
+!_______________________________________________________________________
+subroutine collect_tracer_statistics(elem,hybrid,tl,time,nets,nete)
+
+  ! write global statistics to file to verify test performance
+
+  use control_mod,      only: statefreq
+  use global_norms_mod, only: global_integral
+  use reduction_mod,    only: parallelmax,parallelmin
+
+  type(element_t),    intent(in), target :: elem(:)
+  type(hybrid_t),     intent(in) :: hybrid
+  type (timelevel_t), intent(in) :: tl
+  real(rl),           intent(in) :: time
+  integer,            intent(in) :: nets, nete
+
+  integer :: ie, qi
+  integer :: npts = size(phi_s,1)
+
+  real(rl), dimension(np,np,nets:nete) :: local_Qmass
+  real(rl), dimension(nets:nete):: local_qmin, local_qmax
+  real(rl), dimension(qsize_d)  :: qmass, qmax, qmin
+
+  ! collect statistics at interval specified by statfreq
+
+  if ( mod(tl%nstep,statefreq)/=0) return
+
+  ! measure global mass, max, and min for each tracer
+
+  do qi = 1,qsize
+    do ie=nets,nete
+      local_qmass(:,:,ie) = elem(ie)%accum%Qmass(:,:,qi,1)
+      local_qmin(ie) = minval(elem(ie)%state%q(:,:,:,qi))
+      local_qmax(ie) = maxval(elem(ie)%state%q(:,:,:,qi))
+    enddo
+
+    qmass(qi) = global_integral(elem, local_qmass(:,:,nets:nete),hybrid,npts,nets,nete)/g
+    qmax (qi) = parallelmax(local_qmax,hybrid)
+    qmin (qi) = parallelmin(local_qmin,hybrid)
+
+    if (hybrid%masterthread) then
+      print *,"tracer ",qi," Qmass = ",qmass(qi)," Qmax=",qmax(qi)," Qmin=",qmin(qi)
+    endif
+
+  enddo
 
 end subroutine
 

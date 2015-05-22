@@ -56,8 +56,8 @@
   interp_gridtype  = 1
   output_dir       = "./movies/"                    ! destination dir for netcdf file
   output_timeunits = 1                              ! 1=days, 2=hours, 0=timesteps
-  output_frequency = 1                              ! interval between outputs
-  output_varnames1 = 'u','v','Q','Q2','Q3','Q4'     ! variables to write to file
+  output_frequency = 3                              ! interval between outputs
+  output_varnames1 = 'Q','Q2','Q3','Q4'     ! variables to write to file
   interp_type      = 0                              ! 0=native grid, 1=bilinear
   output_type      ='netcdf'                        ! netcdf or pnetcdf
   io_stride        = 8
