@@ -66,25 +66,27 @@ cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
 date
 
-# run the shorter dcmip test 1-2 first
+# run dcmip test 1-2 
 echo "running dcmip test 1-2"
 ${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl
 if($status) exit
-
 mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 date
 
-# run longer dcmip test 1-1
+# analyze dcmip 1-2 results
+cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
+ncl dcmip1-2_lat_height.ncl
+
+# run dcmip test 1-1
 echo "running dcmip test 1-1"
 ${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE8.nl
 if($status) exit
-
 mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE8
 date
 
-# post-processes the output
-echo "post-processing the data"
-date
+# analyze dcmip 1-1 results
+cp $TEST1_DIR/dcmip1-1_lat_lon.ncl .
+ncl dcmip1-1_lat_lon.ncl
 
 exit
 
