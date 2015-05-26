@@ -30,7 +30,6 @@ endif
 
 cd ${CONFIGURE_DIR}; source configure.sh
 
-set TEST1_DIR = $BLD_DIR/test/dcmip1-1  # test case directory
 set TEST2_DIR = $BLD_DIR/test/dcmip1-2  # test case directory
 set VCOORD    = $REPO/test/vcoord       # location of vertical coordinate files
 
@@ -40,15 +39,6 @@ set VCOORD    = $REPO/test/vcoord       # location of vertical coordinate files
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
 cp -a $VCOORD vcoord
-
-#_______________________________________________________________________
-# create namelist for DCMIP test 1-1
-cd $TEST1_DIR
-sed s/NE.\*/$NE/ dcmip1-1.nl          |\
-sed s/TIME_STEP.\*/$TSTEP/            |\
-sed s/qsize.\*/qsize=$QSIZE/          |\
-sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE8.nl
 
 #_______________________________________________________________________
 # create namelist for DCMIP test 1-2
@@ -66,41 +56,28 @@ cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
 date
 
-# run dcmip test 1-1
-echo "executing dcmip test 1-1"
-${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE8.nl
-mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE8
-if($status) exit
-date
-
 # run dcmip test 1-2 
-echo "executing dcmip test 1-2"
+echo "running dcmip test 1-2"
 ${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl
-mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 if($status) exit
 date
 
-# plot results
-cp $TEST1_DIR/dcmip1-1_lat_lon.ncl .
+# plot dcmip 1-2 results
 cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
-ncl dcmip1-1_lat_lon.ncl
 ncl dcmip1-2_lat_height.ncl
-display image_dcmip1-1_lat_lon.pdf &
 display image_dcmip1-2_lat_height.pdf &
 date
 
 # print timing info
+echo "DCMIP 1-2 test results"
+echo
 cat HommeTime_stats_DCMIP1-2_NE8 | grep walltotal
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE8 | grep prim_run`"
-echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run`"
+cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run
 echo
 # print error norms
-cp $TEST1_DIR/dcmip1-1_error_norm.ncl .
 cp $TEST2_DIR/dcmip1-2_error_norm.ncl .
-ncl dcmip1-1_error_norm.ncl | tail -n 1
 ncl dcmip1-2_error_norm.ncl | tail -n 1
 echo
-
 exit
 
 
