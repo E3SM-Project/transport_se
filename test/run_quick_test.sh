@@ -58,13 +58,14 @@ date
 
 # run dcmip test 1-2 
 echo "running dcmip test 1-2"
+echo "${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl"
 ${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl
 if($status) exit
 date
 
 # plot dcmip 1-2 results
 cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
-ncl dcmip1-2_lat_height.ncl
+ncl dcmip1-2_lat_height.ncl NE=$NE
 display image_dcmip1-2_lat_height.pdf &
 date
 
@@ -76,7 +77,7 @@ cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run
 echo
 # print error norms
 cp $TEST2_DIR/dcmip1-2_error_norm.ncl .
-ncl dcmip1-2_error_norm.ncl | tail -n 1
+ncl dcmip1-2_error_norm.ncl NE=$NE | tail -n 1
 echo
 exit
 

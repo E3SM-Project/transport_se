@@ -1,1 +1,45 @@
-See the script: test/run.job
+The tracer-transport mini-app (transport_se) is a simplified version of
+HOMME designed to facilitate experimentation and performance improvements.
+
+To configure and build the mini-app:
+
+  1) cp configure.sh ~/work/        copy the configure script to a directory of your choosing
+  2) vi ~/work/configure.sh         customize the USER-DEFINED PARAMETERS using a text editor
+  3) ~/work/configure.sh            execute the script to configure and build the mini-app
+
+To test the mini-app:
+
+  4) cd ~/work/bld/test             navigate to the test directory
+  5) make install                   install the namelists and test scripts
+  6) qsub run_ne8_test.sh           submit a test to the debug queue (or execute it on a laptop)
+  7) tail -n 40 ./out_ne8_jobid     examine timing and error norm results
+  8) display ~/work/run/image_*     examine plots of tracer cross-sections
+
+__________________________________________________________________________________________________________________
+
+Typical results for run_ne8_test.sh on NERSC:Hopper
+
+            name     procs  threads  count         walltotal     wallmax (proc   thrd  )   wallmin (proc   thrd  )
+  DCMIP1-1: prim_run 48     48       3.456000e+04  1.853381e+03  38.974  (     0      0)   25.267  (     1      0)
+  DCMIP1-2: prim_run 48     48       2.880000e+03  9.024055e+01  1.892   (    32      0)   1.660   (     1      0)
+
+  DCMIP1-1: L1=0.564863 L2= 0.527211 Linf= 0.478169 q_max= 0.648135 q_min= -0.0615289
+  DCMIP1-2: L1=0.368728 L2= 0.558725 Linf= 1.040230 q_max= 0.991667 q_min= -5.59564e-05
+
+  Used Resources: cput=00:00:07,energy_used=0,mem=12220kb,vmem=123196kb,walltime=00:01:29
+
+__________________________________________________________________________________________________________________
+
+Typical results for run_ne30_test.sh on NERSC:Hopper
+
+            name      procs  threads  count         walltotal     wallmax (proc   thrd  )   wallmin (proc   thrd  )
+  DCMIP1-1  prim_run  216    216      7.464960e+05  8.528053e+04  394.886 (     6      0)   393.686 (     1      0)
+  DCMIP1-2  prim_run  216    216      6.220800e+04  5.899456e+03  27.387  (   202      0)    25.604 (     1      0)
+
+  DCMIP1-1: L1=0.1810760 L2= 0.209121 Linf= 0.317952 q_max= 1.014850 q_min= -0.0410253
+	DCMIP1-2: L1=0.0799994 L2= 0.150355 Linf= 0.297211 q_max= 0.977932 q_min= -5.7599e-13
+
+  Used Resources: cput=00:00:09,energy_used=0,mem=97628kb,vmem=208712kb,walltime=00:08:41
+
+
+

@@ -1,5 +1,7 @@
 ;
 ;  plot lattitude-longitude tracer cross-sections
+;
+;  usage: ncl dcmip1-1_lat_lon.ncl NE=<number of elements per edge>
 ;_______________________________________________________________________
 
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
@@ -13,7 +15,8 @@ begin
 
   ; load coordinates of interpolated data
 
-  f    = addfile("movies/dcmip1-11.nc","r")
+  f    = addfile("./movies/dcmip1-11.nc","r")
+  ;f    = addfile("../../run/movies/dcmip1-11.nc","r")
   lat  = f->lat;
   lon  = f->lon;
   lev  = f->lev;
@@ -107,19 +110,18 @@ begin
   pres@gsnPanelLabelBar     = True            ; add common label bar
   pres@lbLabelFontHeightF   = 0.012            ; set labelbar font height
   pres@txFontHeightF        = 0.018            ; set text font height
-  pres@txString             = "DCMIP 1-1 tracers at height z = "+z+" m"
+  pres@txString             = "DCMIP 1-1    NE="+ NE +"    z="+z+" m"
 
   ; set output type and name
+
+  filename ="image_dcmip1-1_lat_lon_NE"+NE
+  print("writing "+filename)
 
   wks_type                  = "pdf"
   wks_type@wkPaperHeightF   = 8
   wks_type@wkPaperWidthF    = 8
-
-  filename ="image_dcmip1-1_lat_lon"
-
 	wks = gsn_open_wks(wks_type,filename)
-  print("writing "+filename)
-  
+
   ; define custom colormap
 
   gsn_define_colormap(wks,"WhiteBlueGreenYellowRed")      ; choose default colormap

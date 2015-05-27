@@ -1,6 +1,7 @@
 ;
 ;  plot lattitude-longitude tracer cross-sections
 ;
+;  usage: ncl dcmip1-2_lat_height.ncl NE=<number of elements per edge>
 ;_______________________________________________________________________
 
 load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"   
@@ -13,6 +14,8 @@ begin
   ; load interpolation points
 
   f1    = addfile("./movies/dcmip1-21.nc","r")
+  ;f1  = addfile("../../../run/movies/dcmip1-21.nc","r")
+
   lat   = f1->lat
   lon   = f1->lon
   lev   = f1->lev
@@ -90,11 +93,13 @@ begin
   pres@gsnPanelLabelBar     = True            ; add common label bar
   pres@lbLabelFontHeightF   =0.012            ; set labelbar font height
   pres@txFontHeightF        =0.016            ; set text font height
-  pres@txString             = "DCMIP 1-2 tracer q2 at lon="+lon(midlon)+" dg"
+  pres@txString             = "DCMIP 1-2   q2    NE="+NE+"    lon="+lon(midlon)+" dg"
 
   ; Create workstation for file output
 
-  name  = "image_dcmip1-2_lat_height"
+  name  = "image_dcmip1-2_lat_height_NE"+NE
+  print("writing "+name)
+
   wks_type                  = "pdf"
   wks_type@wkPaperHeightF   = 8
   wks_type@wkPaperWidthF    = 4.5
