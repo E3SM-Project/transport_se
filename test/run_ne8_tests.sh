@@ -68,37 +68,40 @@ date
 
 # run dcmip test 1-1
 echo "executing dcmip test 1-1"
+echo "${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE8.nl"
 ${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE8.nl
-mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE8
 if($status) exit
+mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE8
 date
 
 # run dcmip test 1-2 
 echo "executing dcmip test 1-2"
+echo "${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl"
 ${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl
-mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 if($status) exit
+mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 date
 
 # plot results
+echo
+echo "Running analysis scripts"
+echo
 cp $TEST1_DIR/dcmip1-1_lat_lon.ncl .
 cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
-ncl dcmip1-1_lat_lon.ncl
-ncl dcmip1-2_lat_height.ncl
-display image_dcmip1-1_lat_lon.pdf &
-display image_dcmip1-2_lat_height.pdf &
-date
+ncl dcmip1-1_lat_lon.ncl    NE=$NE
+ncl dcmip1-2_lat_height.ncl NE=$NE
 
 # print timing info
 cat HommeTime_stats_DCMIP1-2_NE8 | grep walltotal
 echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE8 | grep prim_run`"
 echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run`"
 echo
+
 # print error norms
 cp $TEST1_DIR/dcmip1-1_error_norm.ncl .
 cp $TEST2_DIR/dcmip1-2_error_norm.ncl .
-ncl dcmip1-1_error_norm.ncl | tail -n 1
-ncl dcmip1-2_error_norm.ncl | tail -n 1
+ncl dcmip1-1_error_norm.ncl NE=$NE | tail -n 1
+ncl dcmip1-2_error_norm.ncl NE=$NE | tail -n 1
 echo
 
 exit

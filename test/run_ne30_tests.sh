@@ -1,7 +1,7 @@
 #!/bin/tcsh
 #
-#PBS -l walltime=0:05:00
-#PBS -l mppwidth=256
+#PBS -l walltime=0:25:00
+#PBS -l mppwidth=216
 #PBS -j oe
 #PBS -o out_ne30_$PBS_JOBID
 #PBS -e err_ne30_$PBS_JOBID
@@ -15,7 +15,7 @@
 #_______________________________________________________________________
 
 set NE       = 30         # number of elements per cube-edge
-set NCPU     = 256        # number of CPUs to use
+set NCPU     = 216        # number of CPUs to use
 set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 300        # timestep size
 set NU       = 1e15       # hyperviscosity coefficient
@@ -48,6 +48,7 @@ sed s/NE.\*/$NE/ dcmip1-1.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
+sed s/statefreq.\*/statefreq=100/     |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE30.nl
 
 #_______________________________________________________________________
@@ -57,6 +58,7 @@ sed s/NE.\*/$NE/ dcmip1-2.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
+sed s/statefreq.\*/statefreq=100/     |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2_NE30.nl
 
 #_______________________________________________________________________
@@ -66,29 +68,43 @@ cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
 date
 
-# run dcmip test 1-2
-echo "running dcmip 1-2"
-${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE30.nl
-if($status) exit
-mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE30
-date
-
-# analyze dcmip 1-2 results
-echo "plotting dcmip 1-2 results"
-cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
-ncl dcmip1-2_lat_height.ncl
-
 # run dcmip test 1-1
-echo "running dcmip 1-1"
+echo "executing dcmip test 1-1"
+echo "${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE30.nl"
 ${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE30.nl
 if($status) exit
 mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE30
 date
 
-# analyze dcmip 1-1 results
-echo "plotting dcmip 1-1 results"
+# run dcmip test 1-2
+echo "executing dcmip test 1-2"
+echo "${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE30.nl"
+${RUN_COMMAND}  $NCPU $EXE < dcmip1-2_NE30.nl
+if($status) exit
+mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE30
+date
+
+# plot results
+echo
+echo "Running analysis scripts"
+echo
 cp $TEST1_DIR/dcmip1-1_lat_lon.ncl .
-ncl dcmip1-1_lat_lon.ncl
+cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
+ncl dcmip1-1_lat_lon.ncl    NE=30
+ncl dcmip1-2_lat_height.ncl NE=30
+
+# print timing info
+cat HommeTime_stats_DCMIP1-1_NE30 | grep walltotal
+echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE30 | grep prim_run`"
+echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE30 | grep prim_run`"
+echo
+
+# print error norms
+cp $TEST1_DIR/dcmip1-1_error_norm.ncl .
+cp $TEST2_DIR/dcmip1-2_error_norm.ncl .
+ncl dcmip1-1_error_norm.ncl  NE=30 | tail -n 1
+ncl dcmip1-2_error_norm.ncl  NE=30 | tail -n 1
+echo
 
 exit
 
