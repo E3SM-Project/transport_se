@@ -56,29 +56,31 @@ cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
 date
 
-# run dcmip test 1-2 
-echo "running dcmip test 1-2"
+# run dcmip test 1-2
+echo "executing dcmip test 1-2"
 echo "${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl"
 ${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE8.nl
 if($status) exit
+mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 date
 
-# plot dcmip 1-2 results
+# plot results
+echo
+echo "Running analysis scripts"
+echo
 cp $TEST2_DIR/dcmip1-2_lat_height.ncl .
 ncl dcmip1-2_lat_height.ncl NE=$NE
-display image_dcmip1-2_lat_height.pdf &
-date
 
 # print timing info
-echo "DCMIP 1-2 test results"
-echo
 cat HommeTime_stats_DCMIP1-2_NE8 | grep walltotal
-cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run
+echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE8 | grep prim_run`"
 echo
+
 # print error norms
 cp $TEST2_DIR/dcmip1-2_error_norm.ncl .
 ncl dcmip1-2_error_norm.ncl NE=$NE | tail -n 1
 echo
+
 exit
 
 
