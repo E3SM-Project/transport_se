@@ -1441,20 +1441,10 @@ subroutine vertical_remap_cuda(elem,fvm,hvcoord,dt,np1,np1_qdp,nets,nete)
   use element_mod, only: element_t
   use dimensions_mod, only: nc, ntrac
   use perf_mod, only: t_startf, t_stopf
-#if defined(_SPELT)
-  use spelt_mod, only: spelt_struct
-#else
   use fvm_control_volume_mod, only : fvm_struct
-#endif    
-#if defined(_SPELT)
-  type(spelt_struct), intent(inout) :: fvm(:)
-  real (kind=real_kind) :: cdp(1:nep,1:nep,nlev,ntrac-1) 
-  real (kind=real_kind)  :: psc(nep,nep), dpc(nep,nep,nlev),dpc_star(nep,nep,nlev)
-#else
   type(fvm_struct), intent(inout) :: fvm(:)
   real (kind=real_kind) :: cdp(1:nc,1:nc,nlev,ntrac-1) 
   real (kind=real_kind)  :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
-#endif
   type (element_t), intent(inout)   :: elem(:)
   type (hvcoord_t)                  :: hvcoord
   real (kind=real_kind)             :: dt

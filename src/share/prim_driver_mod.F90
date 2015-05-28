@@ -6,7 +6,7 @@
 #define _DBG_
 module prim_driver_mod
   use kinds, only : real_kind, iulog, longdouble_kind
-  use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, ntrac, qsize, nc,nhc, nep, nipm
+  use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, ntrac, qsize, nc,nhc
   use cg_mod, only : cg_t
   use hybrid_mod, only : hybrid_t
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
@@ -34,7 +34,6 @@ module prim_driver_mod
   type (quadrature_t)   :: gp                     ! element GLL points
   real(kind=longdouble_kind)  :: fvm_corners(nc+1)     ! fvm cell corners on reference element
   real(kind=longdouble_kind)  :: fvm_points(nc)     ! fvm cell centers on reference element
-  real (kind=longdouble_kind) :: spelt_refnep(1:nep)
 
 
 #ifndef CAM
@@ -367,11 +366,6 @@ contains
        fvm_points(i)= ( fvm_corners(i)+fvm_corners(i+1) ) /2
     end do
 
-    xtmp=nep-1
-    do i=1,nep
-      spelt_refnep(i)= 2*(i-1)/xtmp - 1
-    end do
-
     if (topology=="cube") then
        if(par%masterproc) write(iulog,*) "initializing cube elements..."
        if (MeshUseMeshFile) then
@@ -564,7 +558,7 @@ contains
     use, intrinsic :: iso_c_binding
 #endif
     use thread_mod, only : nthreads
-    use derivative_mod, only : derivinit, interpolate_gll2fvm_points, interpolate_gll2spelt_points, v2pinit
+    use derivative_mod, only : derivinit, interpolate_gll2fvm_points, v2pinit
     use global_norms_mod, only : test_global_integral, print_cfl
     use hybvcoord_mod, only : hvcoord_t
     use prim_advection_mod, only: prim_advec_init2, deriv
@@ -656,7 +650,7 @@ contains
     ! ==================================
     ! Initialize derivative structure
     ! ==================================
-    call Prim_Advec_Init2(hybrid, fvm_corners, fvm_points, spelt_refnep)
+    call Prim_Advec_Init2(hybrid, fvm_corners, fvm_points)
 
     ! ====================================
     ! In the semi-implicit case:
@@ -1136,7 +1130,6 @@ contains
     use derivative_mod, only : subcell_integration
     use parallel_mod, only : abortmp
     use reduction_mod, only : parallelmax
-    use derivative_mod, only : interpolate_gll2spelt_points
     use time_mod,    only : time_at
     use fvm_control_volume_mod, only : fvm_supercycling
 

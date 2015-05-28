@@ -48,7 +48,6 @@ SET(PREQX_SRCS_F90
   ${PHYSICS_DIR}/physics_types_mod.F90
   ${SRC_SHARE_DIR}/dof_mod.F90
   ${SRC_DIR}/common_io_mod.F90
-  ${SRC_SHARE_DIR}/spelt_mod.F90
   ${SRC_SHARE_DIR}/fvm_mod.F90
   ${SRC_SHARE_DIR}/fvm_control_volume_mod.F90
   ${SRC_SHARE_DIR}/fvm_line_integrals_mod.F90 
@@ -178,10 +177,4 @@ ENDIF ()
 createTestExec(preqx preqx ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} 
                ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY})
 
-IF (${BUILD_PREQX_SPELT})
-  MESSAGE(STATUS "  Also building preqx_spelt")
-  createTestExec(preqx_spelt preqx ${PREQX_NP} ${PREQX_NC} ${PREQX_PLEV} 
-                 ${PREQX_USE_PIO}  ${PREQX_USE_ENERGY})
-  SET_TARGET_PROPERTIES(preqx_spelt PROPERTIES COMPILE_DEFINITIONS "_SPELT")
-ENDIF ()
 

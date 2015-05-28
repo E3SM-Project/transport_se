@@ -95,7 +95,6 @@ module namelist_mod
        TRACERTRANSPORT_SEMILAGRANG_GLL, &
        TRACERTRANSPORT_LAGRANGIAN_FVM,  &
        TRACERTRANSPORT_FLUXFORM_FVM,    &
-       TRACERTRANSPORT_SPELT_FVM,       &
        tracer_grid_type,                &
        TRACER_GRIDTYPE_GLL,             &
        TRACER_GRIDTYPE_FVM,             &
@@ -1405,8 +1404,6 @@ module namelist_mod
          write(iulog, *) 'CSLAM tracer advection on FVM grid'
        case (TRACERTRANSPORT_FLUXFORM_FVM)
          write(iulog, *) 'Flux-form CSLAM tracer advection on FVM grid'
-       case (TRACERTRANSPORT_SPELT_FVM)
-         write(iulog, *) 'Spelt tracer advection on FVM grid'
        end select
        if (fvm_ideal_test /= IDEAL_TEST_OFF) then
          select case (fvm_test_type)
