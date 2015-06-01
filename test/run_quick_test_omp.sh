@@ -15,8 +15,8 @@
 #_______________________________________________________________________
 
 set NE       = 8          # number of elements per cube-edge
-set NMPI     = 48         # number of MPI tasks to use
-set NTHREADS = 1          # one thread per task
+set NMPI     = 12         # total number of MPI tasks
+set NTHREADS = 4          # number of openMP threads per MPI task
 set TSTEP    = 1440       # timestep size
 set NU       = 2e16       # hyperviscosity coefficient
 set CONFIGURE_DIR = ../../
@@ -58,8 +58,8 @@ date
 
 # run dcmip test 1-2
 echo "executing dcmip test 1-2"
-echo "${RUN_COMMAND} $NMPI $EXE < dcmip1-2_NE8.nl"
-${RUN_COMMAND} $NMPI $EXE < dcmip1-2_NE8.nl
+echo "${RUN_COMMAND} $NMPI -d $NTHREADS $EXE < dcmip1-2_NE8.nl"
+${RUN_COMMAND} $NMPI -d $NTHREADS $EXE < dcmip1-2_NE8.nl
 if($status) exit
 mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE8
 date
