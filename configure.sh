@@ -87,6 +87,7 @@ else
    -DBUILD_HOMME_SWDGX=FALSE    \
    -DBUILD_HOMME_SWEQX=FALSE    \
    -DBUILD_HOMME_PRIMDGX=FALSE  \
+   -DENABLE_OPENMP=TRUE         \
    $REPO
 
   make -j8 clean
