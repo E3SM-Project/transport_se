@@ -170,6 +170,7 @@ IF (ENABLE_HORIZ_OPENMP OR ENABLE_COLUMN_OPENMP)
       MESSAGE(STATUS "Found OpenMP Flags")
       # This file is needed for the timing library - this is currently
       # inaccessible from the timing CMake script
+      SET(OpenMP_C_FLAGS "-qsmp=omp")
       SET(OpenMP_Fortran_FLAGS "${OpenMP_C_FLAGS}")
       MESSAGE(STATUS "OpenMP_Fortran_FLAGS: ${OpenMP_Fortran_FLAGS}")
       MESSAGE(STATUS "OpenMP_C_FLAGS: ${OpenMP_C_FLAGS}")
