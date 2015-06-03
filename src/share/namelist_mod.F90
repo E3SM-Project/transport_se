@@ -80,10 +80,6 @@ module namelist_mod
        vform,           &
        vfile_mid,       &
        vfile_int,       &
-       precon_method, &
-       maxits,        &
-       tol,           &
-       debug_level,   &
        vert_remap_q_alg, &
 #ifndef CAM
        pertlim,      &
@@ -113,8 +109,6 @@ module namelist_mod
   !-----------------
   use parallel_mod, only : parallel_t,  iam, abortmp, &
        partitionfornodes, useframes, mpireal_t, mpilogical_t, mpiinteger_t, mpichar_t
-  !-----------------
-  use cg_mod, only : cg_no_debug
   !-----------------
 
   use interpolate_mod, only : vector_uvars, vector_vvars, max_vecvars, interpolate_analysis, replace_vec_by_vordiv
@@ -305,11 +299,6 @@ module namelist_mod
                      moisture
 #endif
 
-    namelist /solver_nl/precon_method, &
-                        maxits,        &
-                        tol,           &
-                        debug_level
-
     namelist /filter_nl/filter_type,   &
                         transfer_type, &
                         filter_freq,   &
@@ -489,51 +478,9 @@ module namelist_mod
        nEndStep = nmax
 #endif
 
-       if (integration == "semi_imp") then
-          ! =========================
-          ! set solver defaults
-          ! =========================
-          precon_method = "identity"
-          maxits        = 100
-          tol           = 1.0D-13
-          debug_level   = CG_NO_DEBUG
-
-          print *,'HYPERVIS order = ',hypervis_order
-          if (hypervis_order /= 0) then
-             call abortmp("Error: hypervis_order > 0 not supported for semi-implicit model")
-          endif
-
-          write(iulog,*)"reading solver namelist..."
-#if defined(CAM)
-       unitn=getunit()
-       open( unitn, file=trim(nlfilename), status='old' )
-       ierr = 1
-       do while ( ierr /= 0 )
-          read (unitn,solver_nl,iostat=ierr)
-          if (ierr < 0) then
-             call abortmp( subname//':: namelist read returns an'// &
-                  ' end of file or end of record condition' )
-          end if
-       end do
-       close( unitn )
-       call freeunit( unitn )
-#elif defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
-          read(unit=7,nml=solver_nl)
-#else
-          read(*,nml=solver_nl)
-#endif
-       else if((integration .ne. "explicit").and.(integration .ne. "runge_kutta").and. &
-                    (integration .ne. "full_imp")) then
-          call abortmp('integration must be explicit, semi_imp, full_imp, or runge_kutta')
+       if((integration .ne. "explicit").and.(integration .ne. "runge_kutta")) then
+          call abortmp('integration must be explicit or runge_kutta')
        end if
-
-       if (integration == "full_imp") then
-          if (tstep_type<10) then
-             ! namelist did not set a valid tstep_type. pick one:
-             tstep_type=11   ! backward euler
-             !tstep_type=12  ! BDF2 with BE bootstrap
-          endif
-       endif
 
        write(iulog,*)"reading filter namelist..."
        ! Set default mu/freq for advection filtering
@@ -836,12 +783,6 @@ module namelist_mod
 
     call MPI_bcast(uselapi,1,MPIlogical_t,par%root,par%comm,ierr)
 
-    if ((integration == "semi_imp").or.(integration == "full_imp")) then
-       call MPI_bcast(precon_method,MAX_STRING_LEN,MPIChar_t,par%root,par%comm,ierr)
-       call MPI_bcast(maxits     ,1,MPIinteger_t,par%root,par%comm,ierr)
-       call MPI_bcast(tol        ,1,MPIreal_t   ,par%root,par%comm,ierr)
-    end if
-
     call MPI_bcast(filter_type   ,8,MPIChar_t    ,par%root,par%comm,ierr)
     call MPI_bcast(transfer_type ,8,MPIChar_t    ,par%root,par%comm,ierr)
     call MPI_bcast(filter_mu     ,1,MPIreal_t    ,par%root,par%comm,ierr)
@@ -1115,15 +1056,6 @@ module namelist_mod
        write(iulog,*)"readnl: runtype       = ",runtype
 
        write(iulog,*)"readnl: se_prescribed_wind_2d = ", se_prescribed_wind_2d
-
-       if (integration == "semi_imp") then
-          print *
-          write(iulog,*)"solver: precon_method  = ",precon_method
-          write(iulog,*)"solver: max iterations = ",maxits
-          write(iulog,*)"solver: tolerance      = ",tol
-          write(iulog,*)"solver: debug_level    = ",debug_level
-       endif
-
 
        if (hypervis_power /= 0)then
           write(iulog,*)"Variable scalar hyperviscosity: hypervis_power=",hypervis_power

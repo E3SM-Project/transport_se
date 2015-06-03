@@ -301,12 +301,7 @@ contains
        write(iulog,*)'MessageStats: integration: ',integration
        if(integration == "explicit") then 
           call SetSerialParamsExplicit(time_per_elem,np,nlev,machinename,FoundMachine)
-	  write(iulog,*)'MessageStats: After SetSerialParamsExplicit FoundMachine: ',FoundMachine
-       else if(integration == "semi_imp") then 
-          call SetSerialParamsImplicit(time_per_elem,time_per_iter,avg_cg_iters, &
-               np,nelem,nlev,machinename,FoundMachine)
-       else if(integration == "full_imp") then 
-	  write(iulog,*)'MessageStats: not set for implicit integration'
+          write(iulog,*)'MessageStats: After SetSerialParamsExplicit FoundMachine: ',FoundMachine
        endif
     endif
 
@@ -340,17 +335,6 @@ contains
        bytes_per_point = (2*nlev)*8
        call fooCalc(schedule,bytes_per_point,offnode,onnode,count,bndryf)
 
-       if(integration == "semi_imp") then 
-          write(iulog,*)'MessageStats: '
-          write(iulog,*)'MessageStats: 		Boundary Exchange #2		'
-          bytes_per_point = (2*nlev)*8
-          call fooCalc(schedule,bytes_per_point,offnode,onnode,count,bndry2)
-          write(iulog,*)'MessageStats: '
-          write(iulog,*)'MessageStats: 		Helmholtz Boundary Exchange 	'
-          bytes_per_point = (2*nlev)*8
-          call fooCalc(schedule,bytes_per_point,offnode,onnode,count,bndry3)
-       endif
-
 #ifdef _PREDICT
        if(PredictPerformance) then 
 	  !------------------------------------------------------	
@@ -367,23 +351,7 @@ contains
                 endif
                 Time_comm(ip)   = Time_commf + bndry1(ip)%latency + bndry1(ip)%bandwidth
              enddo
-	  else if(integration == "semi_imp") then 
-             do ip=1,npart
-                nelemd0 = Schedule(ip)%nelemd
-                Time_calc1(ip) = time_per_elem*nelemd0
-                Time_calc2(ip) = time_per_iter*nelemd0*avg_cg_iters
-                Time_calc(ip)  = Time_calc1(ip) + Time_calc2(ip)
-                if(filter_freq > 0) then 
-                   Time_commf = (bndryf(ip)%latency + bndryf(ip)%bandwidth)/real(filter_freq,kind=real_kind)
-                else
-                   Time_commf = 0
-                endif
-                Time_comm(ip)  = Time_commf &
-                     + bndry1(ip)%latency + bndry1(ip)%bandwidth   &
-                     +	bndry2(ip)%latency + bndry2(ip)%bandwidth   &
-                     + avg_cg_iters*(bndry3(ip)%latency + bndry3(ip)%bandwidth)
-             enddo
-	  endif
+	  	  endif
 
 	  !-----------------------------------------------------------
 	  ! Print out information about the execution time prediction	
@@ -416,49 +384,9 @@ contains
                      + bndryf(indx_comm(1))%bandwidth)/real(filter_freq,kind=real_kind)
                 if(FoundNetwork) write(iulog,68) Time_commf, bndryf(indx_comm(1))%latency,bndryf(indx_comm(1))%bandwidth
              endif
-	     !---------------------------------------
-             !  Total Communication Cost
-	     !---------------------------------------
-             if(FoundMachine .and. FoundNetwork) &
-                  write(iulog,55) Time_Parallel,Time_calc(indx_calc(1)), Time_comm(indx_comm(1))
-          else if(integration ==  "semi_imp") then 
-             Time_serial = real(nelem,kind=real_kind)*(time_per_elem + avg_cg_iters*time_per_iter)
-             Speedup     = Time_serial/Time_parallel
-	     write(iulog,202) avg_cg_iters
-	     write(iulog,201) Time_serial,1.0D-6*Time_serial*(secpday/tstep)
-             write(iulog,35) MAXVAL(Time_calc1)
-             write(iulog,45) MAXVAL(Time_calc2)
-	     !---------------------------------------
-	     ! Filter Boundary exchange in advance_si
-	     !---------------------------------------
-             if(filter_freq > 0) then 
-                Time_commf   = (bndryf(indx_comm(1))%latency  &
-                     + bndryf(indx_comm(1))%bandwidth)/real(filter_freq,kind=real_kind)
-                if(FoundNetwork) write(iulog,68) Time_commf, bndryf(indx_comm(1))%latency,bndryf(indx_comm(1))%bandwidth
-             endif
-	     !---------------------------------------
-	     ! First Boundary exchange in advance_si
-	     !---------------------------------------
-             Time_comm1   = bndry1(indx_comm(1))%latency + bndry1(indx_comm(1))%bandwidth
-             if(FoundNetwork) write(iulog,65) Time_comm1, bndry1(indx_comm(1))%latency,bndry1(indx_comm(1))%bandwidth
 
 	     !---------------------------------------
-	     ! Second Boundary exchange in advance_si
-	     !---------------------------------------
-             Time_comm2 = bndry2(indx_comm(1))%latency + bndry2(indx_comm(1))%bandwidth
-             if(FoundNetwork) write(iulog,66) Time_comm2, bndry2(indx_comm(1))%latency,bndry2(indx_comm(1))%bandwidth
-
-	     !---------------------------------------
-	     ! Boundary exchange in solver_mod
-	     !---------------------------------------
-             Time_comm3 = bndry3(indx_comm(1))%latency + bndry3(indx_comm(1))%bandwidth
-             if(FoundNetwork)  then
-		write(iulog,67) avg_cg_iters*Time_comm3, avg_cg_iters*bndry3(indx_comm(1))%latency, &
-                     avg_cg_iters*bndry3(indx_comm(1))%bandwidth
-             endif
-
-	     !---------------------------------------
-             !  Total Communication Cost
+       !  Total Communication Cost
 	     !---------------------------------------
              if(FoundMachine .and. FoundNetwork) &
                   write(iulog,55) Time_Parallel,Time_calc(indx_calc(1)), &
@@ -643,13 +571,11 @@ contains
                 if(FoundNetwork) write(iulog,68) Time_commf, bndryf(indx_comm(1))%latency,bndryf(indx_comm(1))%bandwidth
              endif
 	     !---------------------------------------
-             !  Total Communication Cost
+       !  Total Communication Cost
 	     !---------------------------------------
              if(FoundMachine .and. FoundNetwork) &
                   write(iulog,55) Time_Parallel,Time_calc(indx_calc(1)), Time_comm(indx_comm(1))
-          else if(integration ==  "semi_imp") then 
-             write(iulog,*)'PrimMessageStats: not yet support for Semi-Implicit time integration'
-          endif
+             endif
 
           if(FoundMachine .and. FoundNetwork) write(iulog,95) Speedup
        endif

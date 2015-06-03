@@ -7,7 +7,6 @@
 module prim_driver_mod
   use kinds, only : real_kind, iulog, longdouble_kind
   use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
-  use cg_mod, only : cg_t
   use hybrid_mod, only : hybrid_t
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
 #ifndef CAM
@@ -26,12 +25,9 @@ module prim_driver_mod
   private
   public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
 
-  type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
-  type (quadrature_t)   :: gp                     ! element GLL points
-
-
-  type (filter_t)       :: flt             ! Filter struct for v and p grid
-  type (filter_t)       :: flt_advection   ! Filter struct for v grid for advection only
+  type (quadrature_t)   :: gp               ! element GLL points
+  type (filter_t)       :: flt              ! Filter struct for v and p grid
+  type (filter_t)       :: flt_advection    ! Filter struct for v grid for advection only
   real*8  :: tot_iter
   type (ReductionBuffer_ordered_1d_t), save :: red   ! reduction buffer               (shared)
 
@@ -476,7 +472,6 @@ contains
     nets=1
     nete=nelemd
 
-    allocate(cg(0:n_domains-1))
     call prim_advance_init(par,integration)
     call Prim_Advec_Init1(par, n_domains)
     call diffusion_init(par)
@@ -499,9 +494,9 @@ contains
     use filter_mod, only : filter_t, fm_filter_create, taylor_filter_create, &
          fm_transfer, bv_transfer
     use control_mod, only : runtype, integration, filter_mu, filter_mu_advection, test_case, &
-         debug_level, vfile_int, filter_freq, filter_freq_advection, &
+        vfile_int, filter_freq, filter_freq_advection, &
          transfer_type, vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, &
-         s_bv, topology, moisture, precon_method, rsplit, qsplit, rk_stage_user,&
+         s_bv, topology, moisture, rsplit, qsplit, rk_stage_user,&
          sub_case, &
          limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
          hypervis_subcycle_q
@@ -509,7 +504,7 @@ contains
 #ifndef CAM
     use control_mod, only : pertlim                     !used for homme temperature perturbations
 #endif
-    use prim_si_ref_mod, only: prim_si_refstate_init, prim_set_mass
+    use prim_si_ref_mod, only:  prim_set_mass
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding

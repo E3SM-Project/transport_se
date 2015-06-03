@@ -30,11 +30,6 @@
   prescribed_wind   = 1
   energy_fixer      = -1
 /
-&solver_nl
-  precon_method     = "identity"
-  maxits            = 500
-  tol               = 1.e-9
-/
 &filter_nl
   filter_type       = "taylor"
   transfer_type     = "bv"

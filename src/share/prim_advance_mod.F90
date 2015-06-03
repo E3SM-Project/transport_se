@@ -42,11 +42,6 @@ contains
        call initEdgeBuffer(par,edge3p1,4*nlev+1)
     endif
 
-    if(integration == 'semi_imp') then
-       call initEdgeBuffer(par,edge1,nlev)
-       call initEdgeBuffer(par,edge2,2*nlev)
-    end if
-
     ! compute averaging weights for RK+LF (tstep_type=1) timestepping:
     allocate(ur_weights(qsplit))
     ur_weights(:)=0.0d0
@@ -157,11 +152,6 @@ contains
 !                 optimal: for windspeeds ~120m/s,gravity: 340m/2
 !                 run with qsplit=1
 !                 (K&G 2nd order method has CFL=4. tiny CFL improvement not worth 2nd order)
-!
-! integration = "full_imp"
-!
-!   tstep_type=1  Backward Euler or BDF2 implicit dynamics
-!
 
 ! default weights for computing mean dynamics fluxes
     eta_ave_w = 1d0/qsplit

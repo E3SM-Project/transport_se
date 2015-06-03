@@ -398,7 +398,6 @@ module prim_advection_mod
   use filter_mod, only         : filter_t, filter_P
   use hybvcoord_mod, only      : hvcoord_t
   use time_mod, only           : TimeLevel_t, smooth, TimeLevel_Qdp
-  use prim_si_mod, only        : preq_pressure
   use diffusion_mod, only      : scalar_diffusion, diffusion_init
   use control_mod, only        : integration, test_case, filter_freq_advection,  hypervis_order, &
         statefreq, moisture, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &

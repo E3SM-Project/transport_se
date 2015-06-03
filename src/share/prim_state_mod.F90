@@ -434,7 +434,6 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     use element_mod, only : element_t
     use physical_constants, only : Cp, cpwater_vapor
     use physics_mod, only : Virtual_Specific_Heat, Virtual_Temperature
-    use prim_si_mod, only : preq_hydrostatic
 
     integer :: t1,t2,n,nets,nete
     type (element_t)     , intent(inout), target :: elem(:)
