@@ -1204,7 +1204,6 @@ contains
        GridVertex(i)%nbrs(:) = 0
        GridVertex(i)%nbrs_face(:) = 0
        GridVertex(i)%nbrs_wgt(:) = 0
-       GridVertex(i)%nbrs_wgt_ghost(:) = 1
 
        !each elements has one side neighbor (first 4)
        GridVertex(i)%nbrs_ptr(1) = 1

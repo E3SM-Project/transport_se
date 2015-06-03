@@ -23,7 +23,6 @@ module GridGraph_mod
       integer, pointer          :: nbrs(:) => null()           ! The numbers of the neighbor elements
       integer, pointer          :: nbrs_face(:) => null()      ! The cube face number of the neighbor element (nbrs array)
       integer, pointer          :: nbrs_wgt(:) => null()       ! The weights for edges defined by nbrs array
-      integer, pointer          :: nbrs_wgt_ghost(:) => null() ! The weights for edges defined by nbrs array
       integer                   :: nbrs_ptr(num_neighbors + 1) !index into the nbrs array for each neighbor direction
 
       integer                   :: face_number           ! which face of the cube this vertex is on
@@ -95,8 +94,7 @@ contains
     allocate(vertex%nbrs(num))
     allocate(vertex%nbrs_face(num))
     allocate(vertex%nbrs_wgt(num))
-    allocate(vertex%nbrs_wgt_ghost(num))
- 
+
 
   end subroutine allocate_gridvertex_nbrs
 !======================================================================
@@ -108,8 +106,7 @@ contains
     deallocate(vertex%nbrs)
     deallocate(vertex%nbrs_face)
     deallocate(vertex%nbrs_wgt)
-    deallocate(vertex%nbrs_wgt_ghost)
- 
+
   end subroutine deallocate_gridvertex_nbrs
 
 !======================================================================
@@ -162,9 +159,6 @@ contains
      if (associated(vertex2%nbrs_wgt)) then
         nullify(vertex2%nbrs_wgt)
      end if
-     if (associated(vertex2%nbrs_wgt_ghost)) then
-        nullify(vertex2%nbrs_wgt_ghost)
-     end if
 
      call allocate_gridvertex_nbrs(vertex2)
 
@@ -172,7 +166,6 @@ contains
         vertex2%nbrs(i) = vertex1%nbrs(i)
         vertex2%nbrs_face(i) = vertex1%nbrs_face(i)
         vertex2%nbrs_wgt(i)  = vertex1%nbrs_wgt(i)
-        vertex2%nbrs_wgt_ghost(i)  = vertex1%nbrs_wgt_ghost(i)
      enddo
 
      do i=1, num_neighbors+1
@@ -393,7 +386,6 @@ contains
                     Svertex(i)%nbrs(new_pos) = inbr
                     Svertex(i)%nbrs_face(new_pos) = Svertex(i)%nbrs_face(pos)
                     Svertex(i)%nbrs_wgt(new_pos) = Svertex(i)%nbrs_wgt(pos)
-                    Svertex(i)%nbrs_wgt_ghost(new_pos) = Svertex(i)%nbrs_wgt_ghost(pos)
                     ncount = ncount+1
                  endif
            enddo

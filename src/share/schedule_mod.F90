@@ -51,7 +51,7 @@ contains
     type (schedule_t), intent(inout)   :: LSchedule
     type (MetaVertex_t),intent(inout)  :: MetaVertex
 
-    integer                       :: lengthP,total_length,lengthp_ghost
+    integer                       :: lengthP,total_length
     integer                       :: i,j,is,ir,ncycle
     integer                       :: il,ie,ig
     integer                       :: nelemd0
@@ -59,8 +59,7 @@ contains
     integer                       :: inbr
     integer                       :: nSched
     integer,allocatable           :: tmpP(:,:)
-    integer,allocatable           :: tmpP_ghost(:,:)
-    integer                       :: nSend,nRecv,nedges 
+    integer                       :: nSend,nRecv,nedges
     integer                       :: icycle
     integer			  :: iSched
     logical, parameter            :: VerbosePrint=.FALSE.
@@ -110,12 +109,9 @@ contains
 
     ! Temporary array to calculate the Buffer Slot
     allocate(tmpP(2,nedges+1))
-    allocate(tmpP_ghost(2,nedges+1))
 
     tmpP(1,:) = -1
     tmpP(2,:) = 0
-    tmpP_ghost(1,:) = -1
-    tmpP_ghost(2,:) = 0
 
     !  Allocate all the cycle structures
     allocate(LSchedule%SendCycle(nedges))
@@ -136,8 +132,6 @@ contains
 #ifndef _PREDICT
        elem(il)%desc%putmapP=-1
        elem(il)%desc%getmapP=-1
-       elem(il)%desc%putmapP_ghost=-1
-       elem(il)%desc%getmapP_ghost=-1
        elem(il)%desc%reverse = .FALSE.
 #endif
     enddo
@@ -152,21 +146,18 @@ contains
     ir=1
     do j=1,ncycle
        lengthP     =  MetaVertex%edges(j)%wgtP
-       lengthP_ghost     =  MetaVertex%edges(j)%wgtP_ghost
 
        if((MetaVertex%edges(j)%HeadVertex == PartNumber) .AND. &
             (MetaVertex%edges(j)%TailVertex == PartNumber)) then
           inbr                            = PartNumber
           if(Debug) write(iulog,*)'genEdgeSched: point #9', iam
           LSchedule%MoveCycle%ptrP         = FindBufferSlot(inbr,lengthP,tmpP)
-          LSchedule%MoveCycle%ptrP_ghost   = FindBufferSlot(inbr,lengthP_ghost,tmpP_ghost)
           call SetCycle(elem, LSchedule,LSchedule%MoveCycle(1),MetaVertex%edges(j))
           if(Debug) write(iulog,*)'genEdgeSched: point #10',iam
        else if (MetaVertex%edges(j)%TailVertex == PartNumber) then
           inbr                            = MetaVertex%edges(j)%HeadVertex
           if(Debug) write(iulog,*)'genEdgeSched: point #11', iam
           LSchedule%SendCycle(is)%ptrP     = FindBufferSlot(inbr,lengthP,tmpP)
-          LSchedule%SendCycle(is)%ptrP_ghost= FindBufferSlot(inbr,lengthP_ghost,tmpP_ghost)
           call SetCycle(elem, LSchedule,LSchedule%SendCycle(is),MetaVertex%edges(j))
           if(Debug) write(iulog,*)'genEdgeSched: point #12',iam
           is = is+1
@@ -174,7 +165,6 @@ contains
           inbr                            = MetaVertex%edges(j)%TailVertex
           if(Debug) write(iulog,*)'genEdgeSched: point #13',iam
           LSchedule%RecvCycle(ir)%ptrP     = FindBufferSlot(inbr,lengthP,tmpP)
-          LSchedule%RecvCycle(ir)%ptrP_ghost= FindBufferSlot(inbr,lengthP_ghost,tmpP_ghost)
           call SetCycle(elem, LSchedule,LSchedule%RecvCycle(ir),MetaVertex%edges(j))
           if(Debug) write(iulog,*)'genEdgeSched: point #14',iam
           ir = ir+1
@@ -182,8 +172,6 @@ contains
     enddo
 
     deallocate(tmpP)
-    deallocate(tmpP_ghost)
-
 
 
     do ie=1,nelemd0
@@ -994,7 +982,6 @@ contains
 
        if(il .gt. 0) then 
           elem(il)%desc%putmapP(loc) = Edge%edgeptrP(i) + Cycle%ptrP - 1  ! offset, so start at 0
-          elem(il)%desc%putmapP_ghost(loc) = Edge%edgeptrP_ghost(i) + Cycle%ptrP_ghost  ! index, start at 1
           elem(il)%desc%reverse(loc) = Edge%members(i)%reverse
        endif
 
@@ -1019,7 +1006,6 @@ contains
 
        if(il .gt. 0) then 
           elem(il)%desc%getmapP(loc) = Edge%edgeptrP(i) + Cycle%ptrP - 1
-          elem(il)%desc%getmapP_ghost(loc) = Edge%edgeptrP_ghost(i) + Cycle%ptrP_ghost 
           elem(il)%desc%globalID(loc) = Edge%members(i)%tail%number
        endif
 
@@ -1032,7 +1018,6 @@ contains
     Cycle%source = Edge%TailVertex
     Cycle%tag    = BNDRY_EXCHANGE_MESSAGE
     Cycle%lengthP = Edge%wgtP
-    Cycle%lengthP_ghost = Edge%wgtP_ghost
 
   end subroutine SetCycle
 

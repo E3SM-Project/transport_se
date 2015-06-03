@@ -21,8 +21,6 @@ private
      real (kind=real_kind) :: Dvv_diag(np,np)
      real (kind=real_kind) :: Dvv_twt(np,np)
      real (kind=real_kind) :: Mvv_twt(np,np)  ! diagonal matrix of GLL weights
-     real (kind=real_kind) :: Mfvm(np,nc+1)
-     real (kind=real_kind) :: Cfvm(np,nc)
      real (kind=real_kind) :: legdg(np,np)
   end type derivative_t
 
@@ -56,10 +54,7 @@ private
   public :: vorticity
   public :: divergence
 
-  public :: interpolate_gll2fvm_corners
-  public :: interpolate_gll2fvm_points
   public :: remap_phys2gll
-
 
   interface divergence
       module procedure divergence_nonstag
@@ -118,11 +113,8 @@ contains
 ! derivatives and interpolating
 ! ==========================================
 
-  subroutine derivinit(deriv,fvm_corners, fvm_points)
+  subroutine derivinit(deriv)
     type (derivative_t)      :: deriv
-!    real (kind=longdouble_kind),optional :: phys_points(:)
-    real (kind=longdouble_kind),optional :: fvm_corners(nc+1)
-    real (kind=longdouble_kind),optional :: fvm_points(nc)
 
     ! Local variables
     type (quadrature_t) :: gp   ! Quadrature points and weights on pressure grid
@@ -191,13 +183,8 @@ contains
 
     deriv%Dvv_twt = TRANSPOSE(dvv)
     deriv%Mvv_twt = v2v
-    if (present(fvm_corners)) &
-         call v2pinit(deriv%Mfvm,gp%points,fvm_corners,np,nc+1)
 
-    if (present(fvm_points)) &
-         call v2pinit(deriv%Cfvm,gp%points,fvm_points,np,nc)
-
-    ! notice we deallocate this memory here even though it was allocated 
+    ! notice we deallocate this memory here even though it was allocated
     ! by the call to gausslobatto.
     deallocate(gp%points)
     deallocate(gp%weights)
@@ -448,15 +435,6 @@ end do
     enddo
     deallocate(gll_pts%points)
     deallocate(gll_pts%weights)
-
-#if 0
-    do j=1,n2   ! this should be fvm points
-       do l=1,n1   ! this should be GLL points
-          print *,l,j,v2p_new(l,j),v2p(l,j)
-       enddo
-    enddo
-    print *,'max error: ',maxval(abs(v2p_new-v2p))
-#endif
 
     v2p=v2p_new
   end subroutine v2pinit
@@ -1384,88 +1362,6 @@ endif
 
 
 
-
-!  ================================================
-!  interpolate_gll2fvm_points:
-!
-!  shape funtion interpolation from data on GLL grid to cellcenters on physics grid
-!  Author: Christoph Erath
-!  ================================================
-  function interpolate_gll2fvm_points(v,deriv) result(p)
-
-    real(kind=real_kind), intent(in) :: v(np,np)
-    type (derivative_t)         :: deriv
-    real(kind=real_kind) :: p(nc,nc)
-
-    ! Local
-    integer i
-    integer j
-    integer l
-
-    real(kind=real_kind)  sumx00,sumx01
-    real(kind=real_kind)  sumx10,sumx11
-    real(kind=real_kind)  vtemp(np,nc)
-
-    do j=1,np
-       do l=1,nc
-          sumx00=0.0d0
-          do i=1,np
-             sumx00 = sumx00 + deriv%Cfvm(i,l  )*v(i,j  )
-          enddo
-          vtemp(j  ,l) = sumx00
-        enddo
-    enddo
-    do j=1,nc
-       do i=1,nc
-          sumx00=0.0d0
-          do l=1,np
-             sumx00 = sumx00 + deriv%Cfvm(l,j  )*vtemp(l,i)
-          enddo
-          p(i  ,j  ) = sumx00
-       enddo
-    enddo
-  end function interpolate_gll2fvm_points
-
-!  ================================================
-!  interpolate_gll2fvm_corners:
-!
-!  shape funtion interpolation from data on GLL grid to physics grid
-!
-!  ================================================
-  function interpolate_gll2fvm_corners(v,deriv) result(p)
-
-    real(kind=real_kind), intent(in) :: v(np,np)
-    type (derivative_t), intent(in) :: deriv
-    real(kind=real_kind) :: p(nc+1,nc+1)
-
-    ! Local
-    integer i
-    integer j
-    integer l
-
-    real(kind=real_kind)  sumx00,sumx01
-    real(kind=real_kind)  sumx10,sumx11
-    real(kind=real_kind)  vtemp(np,nc+1)
-
-    do j=1,np
-       do l=1,nc+1
-          sumx00=0.0d0
-          do i=1,np
-             sumx00 = sumx00 + deriv%Mfvm(i,l  )*v(i,j  )
-          enddo
-          vtemp(j  ,l) = sumx00
-        enddo
-    enddo
-    do j=1,nc+1
-       do i=1,nc+1
-          sumx00=0.0d0
-          do l=1,np
-             sumx00 = sumx00 + deriv%Mfvm(l,j  )*vtemp(l,i)
-          enddo
-          p(i  ,j  ) = sumx00
-       enddo
-    enddo
-  end function interpolate_gll2fvm_corners
 
 
 #if 0

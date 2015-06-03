@@ -1439,11 +1439,9 @@ subroutine vertical_remap_cuda(elem,fvm,hvcoord,dt,np1,np1_qdp,nets,nete)
   use control_mod, only :  rsplit
   use parallel_mod, only : abortmp, iam
   use element_mod, only: element_t
-  use dimensions_mod, only: nc, ntrac
+  use dimensions_mod, only: nc
   use perf_mod, only: t_startf, t_stopf
-  use fvm_control_volume_mod, only : fvm_struct
   type(fvm_struct), intent(inout) :: fvm(:)
-  real (kind=real_kind) :: cdp(1:nc,1:nc,nlev,ntrac-1) 
   real (kind=real_kind)  :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
   type (element_t), intent(inout)   :: elem(:)
   type (hvcoord_t)                  :: hvcoord
@@ -1560,11 +1558,7 @@ subroutine remap_Q_ppm_cuda(elem,nx,qsize,dp1,dp2,np1_qdp,ie)
                                       !It makes sure there's an old interface value below the domain that is larger.
       pin(nlev+1) = pio(nlev+1)       !The total mass in a column does not change.
                                       !Therefore, the pressure of that mass cannot either.
-      !Fill in the ghost regions with mirrored values. if vert_remap_q_alg is defined, this is of no consequence.
-      do k = 1 , gs
-        dpo_h(i,j,1   -k,ie) = dpo_h(i,j,       k,ie)
-        dpo_h(i,j,nlev+k,ie) = dpo_h(i,j,nlev+1-k,ie)
-      enddo
+
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
       !interface location. In practice, the grid never deforms past one cell, so the search can be
@@ -1643,14 +1637,7 @@ attributes(global) subroutine remap_Q_ppm_cuda_kernel( Qdp , dpo , ppmdx , z1 , 
     enddo
   endif
   call syncthreads()
-  !Fill in ghost values. Ignored if vert_remap_q_alg == 2
-  if (threadidx%z == 1) then
-    do k = 1 , gs
-      ao(i,j,1   -k) = ao(i,j,       k)
-      ao(i,j,nlev+k) = ao(i,j,nlev+1-k)
-    enddo
-  endif
-  call syncthreads()
+
   !Compute monotonic and conservative PPM reconstruction over every cell
   coefs(:,:,:,:) = compute_ppm_d( ao , ppmdx , ai , dma , vert_remap_q_alg , i , j )
   call syncthreads()
@@ -1845,7 +1832,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   real (kind=real_kind), intent(inout) :: Qdp(nx,nx,nlev,qsize)
   real (kind=real_kind), intent(in) :: dp1(nx,nx,nlev),dp2(nx,nx,nlev)
   ! Local Variables
-  integer, parameter :: gs = 2                              !Number of cells to place in the ghost region
   real(kind=real_kind), dimension(       nlev+2 ) :: pio    !Pressure at interfaces for old grid
   real(kind=real_kind), dimension(       nlev+1 ) :: pin    !Pressure at interfaces for new grid
   real(kind=real_kind), dimension(       nlev+1 ) :: masso  !Accumulate mass up to each interface
@@ -1877,11 +1863,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
                                       !It makes sure there's an old interface value below the domain that is larger.
       pin(nlev+1) = pio(nlev+1)       !The total mass in a column does not change.
                                       !Therefore, the pressure of that mass cannot either.
-      !Fill in the ghost regions with mirrored values. if vert_remap_q_alg is defined, this is of no consequence.
-      do k = 1 , gs
-        dpo(1   -k) = dpo(       k)
-        dpo(nlev+k) = dpo(nlev+1-k)
-      enddo
 
       !Compute remapping intervals once for all tracers. Find the old grid cell index in which the
       !k-th new cell interface resides. Then integrate from the bottom of that old cell to the new
@@ -1923,11 +1904,7 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
           masso(k+1) = masso(k) + ao(k) !Accumulate the old mass. This will simplify the remapping
           ao(k) = ao(k) / dpo(k)        !Divide out the old grid spacing because we want the tracer mixing ratio, not mass.
         enddo
-        !Fill in ghost values. Ignored if vert_remap_q_alg == 2
-        do k = 1 , gs
-          ao(1   -k) = ao(       k)
-          ao(nlev+k) = ao(nlev+1-k)
-        enddo
+
         !Compute monotonic and conservative PPM reconstruction over every cell
         coefs(:,:) = compute_ppm( ao , ppmdx )
         !Compute tracer values on the new grid by integrating from the old cell bottom to the new

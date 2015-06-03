@@ -4,34 +4,19 @@
 
 module dimensions_mod
 #ifdef CAM
-#ifdef FVM_TRACERS
-  use constituents, only : ntrac_d=>pcnst ! _EXTERNAL
-!!XXgoldyXX:
   use constituents, only : qsize_d=>pcnst ! _EXTERNAL
-!!XXgoldyXX:
-#else
-  use constituents, only : qsize_d=>pcnst ! _EXTERNAL
-#endif
 #endif
   implicit none
   private
 
 ! set MAX number of tracers.  actual number of tracers is a run time argument  
 #ifdef CAM
-#ifdef FVM_TRACERS
-!!XXgoldyXX:
-!  integer, parameter         :: qsize_d = 1        ! SE tracers  
-!!XXgoldyXX:
-#else
-  integer, parameter         :: ntrac_d = 0        ! fvm tracers
-#endif
 #else
 #ifdef QSIZE_D
   integer, parameter         :: qsize_d=QSIZE_D    ! SE tracers  
 #else
   integer, parameter         :: qsize_d=4          ! SE tracers: default is 4
 #endif
-  integer, parameter         :: ntrac_d=4          ! fvm tracers
 #endif
 
 #ifdef _PRIM
@@ -44,21 +29,7 @@ module dimensions_mod
   integer, parameter, public :: np = NP
   integer, parameter, public :: nc  = NC
 
-  integer         :: ntrac = 0
   integer         :: qsize = 0
-
-  ! fvm dimensions:
-  integer, parameter, public :: ngpc=2       !number of Gausspoints for the fvm integral approximation  
-  integer, parameter, public :: nhe=1        !Max. Courant number
-  integer, parameter, public :: nhr=2        !halo width needed for reconstruction - phl
-  integer, parameter, public :: nht=nhe+nhr  !total halo width where reconstruction is needed (nht<=nc) - phl
-                                             !(different from halo needed for elements on edges and corners
-!  integer, parameter, public :: ns=3         !quadratic halo interpolation - recommended setting for nc=3
-!  integer, parameter, public :: ns=4         !cubic halo interpolation     - recommended setting for nc=4
-  integer, parameter, public :: ns=NC
-
-  !nhc determines width of halo exchanged with neighboring elements
-  integer, parameter, public :: nhc = nhr+(nhe-1)+(ns-MOD(ns,2))/2
 
   integer, public :: npdg = 0  ! dg degree for hybrid cg/dg element  0=disabled 
 
@@ -78,7 +49,7 @@ module dimensions_mod
   integer, public  :: max_neigh_edges               = 8 !4 + 4*max_corner_elem
 
 
-  public :: qsize,qsize_d,ntrac_d,ntrac
+  public :: qsize,qsize_d
 
   integer, public :: ne
   integer, public :: nelem       ! total number of elements

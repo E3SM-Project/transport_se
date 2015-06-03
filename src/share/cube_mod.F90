@@ -1487,7 +1487,6 @@ contains
              GridElem(i,j,k)%nbrs(:)=0
              GridElem(i,j,k)%nbrs_wgt(:)=0
              GridElem(i,j,k)%nbrs_ptr(:)=0
-             GridElem(i,j,k)%nbrs_wgt_ghost(:)=1  ! always this value
              GridElem(i,j,k)%SpaceCurve=0
              GridElem(i,j,k)%number=number 
              number=number+1
@@ -2104,7 +2103,6 @@ contains
                    GridVertex(ielem)%nbrs(loc)       = GridElem(i,j,k)%nbrs(ll)
                    GridVertex(ielem)%nbrs_face(loc)  = GridElem(i,j,k)%nbrs_face(ll)
                    GridVertex(ielem)%nbrs_wgt(loc)       = GridElem(i,j,k)%nbrs_wgt(ll)
-                   GridVertex(ielem)%nbrs_wgt_ghost(loc) = GridElem(i,j,k)%nbrs_wgt_ghost(ll)
 
                    GridVertex(ielem)%nbrs_ptr(ll+1) = GridVertex(ielem)%nbrs_ptr(ll)+1
                 else

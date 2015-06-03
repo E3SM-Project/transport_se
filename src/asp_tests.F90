@@ -971,13 +971,12 @@ module asp_tests
 !  instability probelms in Jablonowski and Williamson, QJR (2006) 132 
 !
 use element_mod, only : element_t, timelevels
-use fvm_control_volume_mod, only : fvm_struct
 use hybrid_mod, only : hybrid_t
 use hybvcoord_mod, only : hvcoord_t 
 use kinds, only : real_kind
 
 use physical_constants, only : p0, g
-use dimensions_mod, only : nlev,np, qsize,nc,ntrac
+use dimensions_mod, only : nlev,np, qsize,nc
 use control_mod, only : test_case, u_perturb
 use cube_mod, only : rotate_grid
 use jw, only : u_wind, v_wind, temperature, surface_geopotential, tracer_q1_q2,&
@@ -1221,7 +1220,7 @@ END SUBROUTINE test2_steady_state_mountain
 
 
 
-subroutine asp_baroclinic(elem,hybrid,hvcoord,nets,nete, fvm)
+subroutine asp_baroclinic(elem,hybrid,hvcoord,nets,nete)
 !=======================================================================================================!
 !  
 ! new version of JW Baroclinic test case which also allows for rotation
@@ -1231,7 +1230,6 @@ subroutine asp_baroclinic(elem,hybrid,hvcoord,nets,nete, fvm)
     use prim_si_mod, only : preq_hydrostatic
 
     type(element_t), intent(inout) :: elem(:)
-    type(fvm_struct), optional, intent(inout) :: fvm(:)
     type (hvcoord_t)                  :: hvcoord
     type (hybrid_t), intent(in) :: hybrid
     integer :: nets,nete
@@ -1359,97 +1357,6 @@ if (qsize>=5) then
    enddo
    enddo
 endif
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! fvm tracers
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-if (present(fvm)) then
-
-  !
-  ! CSLAM tracers
-  !
-  if (ntrac>=1) then
-     idex=1
-     eta_c = 0.6
-     do ie=nets,nete
-        do j=1,nc
-           do i=1,nc
-              lon = fvm(ie)%centersphere(i,j)%lon
-              lat = fvm(ie)%centersphere(i,j)%lat
-              do k=1,nlev
-                 fvm(ie)%c(i,j,k,idex,:) = tracer_q1_q2(lon,lat,hvcoord%etam(k),rotate_grid, eta_c)
-              enddo
-           enddo
-        enddo
-     enddo
-  endif
-
-
-  if (ntrac>=2) then
-     idex=2
-     eta_c = 1
-     do ie=nets,nete
-        do j=1,nc
-        do i=1,nc
-           lon = fvm(ie)%centersphere(i,j)%lon
-           lat = fvm(ie)%centersphere(i,j)%lat
-           do k=1,nlev
-              fvm(ie)%c(i,j,k,idex,:) = tracer_q1_q2(lon,lat,hvcoord%etam(k),rotate_grid, eta_c)
-           enddo
-        enddo
-        enddo
-     enddo
-  endif
-  if (ntrac>=3) then
-     idex=3
-     do ie=nets,nete
-        do j=1,nc
-        do i=1,nc
-           lon = fvm(ie)%centersphere(i,j)%lon
-           lat = fvm(ie)%centersphere(i,j)%lat
-           do k=1,nlev
-              fvm(ie)%c(i,j,k,idex,:) = tracer_q3(lon,lat,hvcoord%etam(k),rotate_grid)
-           enddo
-        enddo
-        enddo
-     enddo
-  endif
-  if (ntrac>=4) then
-     idex=4
-     eta_c = 0.6
-     do ie=nets,nete
-        do j=1,nc
-        do i=1,nc
-           lon = fvm(ie)%centersphere(i,j)%lon
-           lat = fvm(ie)%centersphere(i,j)%lat
-           do k=1,nlev
-              fvm(ie)%c(i,j,k,idex,:) = tracer_q1_q2(lon,lat,hvcoord%etam(k),rotate_grid, eta_c)
-           enddo
-        enddo
-        enddo
-     enddo
-  endif
-
-  if (ntrac>=5) then
-     do idex=5,ntrac
-     do ie=nets,nete
-        do k=1,nlev
-        do t=1,timelevels
-          do j=1,nc
-            do i=1,nc
-              fvm(ie)%c(i,j,k,idex,t) = 1.0D0
-            enddo
-          enddo
-        enddo
-        enddo
-     enddo
-     enddo
-  endif
-endif
-
-
-
 
 if (qsize>=5) then
    idex=5

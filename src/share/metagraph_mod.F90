@@ -16,11 +16,9 @@ module metagraph_mod
   type, public :: MetaEdge_t
      type (GridEdge_t),pointer     :: members(:)
      integer          ,pointer     :: edgeptrP(:)
-     integer          ,pointer     :: edgeptrP_ghost(:)
      integer                       :: number
      integer                       :: type 
      integer                       :: wgtP       ! sum of lengths of all messages to pack for edges
-     integer                       :: wgtP_ghost ! sum of lengths of all messages to pack for ghost cells
      integer                       :: HeadVertex ! processor number to send to
      integer                       :: TailVertex ! processor number to send from
      integer                       :: nmembers   ! number of messages to (un)pack (out)into this buffer
@@ -65,7 +63,6 @@ contains
     edge2%number   = edge1%number
     edge2%type     = edge1%type
     edge2%wgtP      = edge1%wgtP
-    edge2%wgtP_ghost      = edge1%wgtP_ghost
     edge2%nmembers = edge1%nmembers
 
     if (associated(edge1%members)) then
@@ -77,10 +74,8 @@ contains
 
     if (associated(edge1%edgeptrP)) then
        allocate(edge2%edgeptrP(edge2%nmembers))
-       allocate(edge2%edgeptrP_ghost(edge2%nmembers))
        do i=1,edge2%nmembers
           edge2%edgeptrP(i)=edge1%edgeptrP(i)
-          edge2%edgeptrP_ghost(i)=edge1%edgeptrP_ghost(i)
        end do
     end if
 
@@ -334,7 +329,6 @@ contains
     MetaVertex%edges%number   = 0
     MetaVertex%edges%nmembers = 0
     MetaVertex%edges%wgtP     = 0
-    MetaVertex%edges%wgtP_ghost     = 0
     do i=1,nedges
        NULLIFY(MetaVertex%edges(i)%members)
     enddo
@@ -358,8 +352,6 @@ contains
 
           MetaVertex%edges(j)%nmembers                = MetaVertex%edges(j)%nmembers+1
           MetaVertex%edges(j)%wgtP                    = MetaVertex%edges(j)%wgtP + wgtP
-
-          MetaVertex%edges(j)%wgtP_ghost              = MetaVertex%edges(j)%wgtP_ghost + Gridedge(i)%tail%nbrs_wgt_ghost(ii)
 
           if(Debug) write(iulog,*)'initMetagraph: point #9'
 
@@ -391,9 +383,7 @@ contains
        !  Allocate space for the member edges and edge index
        allocate(MetaVertex%edges(i)%members (MetaVertex%edges(i)%nmembers))
        allocate(MetaVertex%edges(i)%edgeptrP(MetaVertex%edges(i)%nmembers))
-       allocate(MetaVertex%edges(i)%edgeptrP_ghost(MetaVertex%edges(i)%nmembers))
        MetaVertex%edges(i)%edgeptrP(:)=0
-       MetaVertex%edges(i)%edgeptrP_ghost(:)=0
     enddo
     if(Debug) write(iulog,*)'initMetagraph: point #14'
 
@@ -413,8 +403,6 @@ contains
              wgtP=Gridedge(i)%tail%nbrs_wgt(ii)
              MetaVertex%edges(j)%edgeptrP(icount(j)+1) = MetaVertex%edges(j)%edgeptrP(icount(j)) + wgtP
 
-             wgtP=Gridedge(i)%tail%nbrs_wgt_ghost(ii)
-             MetaVertex%edges(j)%edgeptrP_ghost(icount(j)+1) = MetaVertex%edges(j)%edgeptrP_ghost(icount(j)) + wgtP
           endif
           if(Debug) write(iulog,*)'initMetagraph: point #15'
           icount(j)=icount(j)+1

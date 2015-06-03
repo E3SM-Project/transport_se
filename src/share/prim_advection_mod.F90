@@ -72,10 +72,9 @@ module vertremap_mod
   !**************************************************************************************
 
   use kinds, only                  : real_kind,int_kind
-  use dimensions_mod, only         : np,nlev,qsize,nlevp,npsq,ntrac,nc
+  use dimensions_mod, only         : np,nlev,qsize,nlevp,npsq,nc
   use hybvcoord_mod, only          : hvcoord_t
   use element_mod, only            : element_t
-  use fvm_control_volume_mod, only : fvm_struct
   use perf_mod, only               : t_startf, t_stopf  ! _EXTERNAL
   use parallel_mod, only           : abortmp, parallel_t
   use control_mod, only : vert_remap_q_alg
@@ -391,12 +390,11 @@ module prim_advection_mod
 !
 !
   use kinds, only              : real_kind
-  use dimensions_mod, only     : nlev, nlevp, np, qsize, ntrac, nc
+  use dimensions_mod, only     : nlev, nlevp, np, qsize, nc
   use physical_constants, only : rgas, Rwater_vapor, kappa, g, rearth, rrearth, cp
   use derivative_mod, only     : gradient, vorticity, gradient_wk, derivative_t, divergence, &
                                  gradient_sphere, divergence_sphere
   use element_mod, only        : element_t
-  use fvm_control_volume_mod, only        : fvm_struct
   use filter_mod, only         : filter_t, filter_P
   use hybvcoord_mod, only      : hvcoord_t
   use time_mod, only           : TimeLevel_t, smooth, TimeLevel_Qdp
@@ -406,7 +404,7 @@ module prim_advection_mod
         statefreq, moisture, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &
         nu_q, limiter_option, hypervis_subcycle_q
   use edge_mod, only           : EdgeBuffer_t, edgevpack, edgerotate, edgevunpack, initedgebuffer, &
-       edgevunpackmin, ghostbuffer3D_t, initghostbuffer3D
+       edgevunpackmin
   use hybrid_mod, only         : hybrid_t
   use bndry_mod, only          : bndry_exchangev
   use viscosity_mod, only      : biharmonic_wk_scalar, biharmonic_wk_scalar_minmax, neighbor_minmax
@@ -423,7 +421,6 @@ module prim_advection_mod
   public :: vertical_remap
 
   type (EdgeBuffer_t) :: edgeAdv, edgeAdvQ3, edgeAdv_p1, edgeAdvQ2, edgeAdv1,  edgeveloc
-  type (ghostBuffer3D_t)   :: ghostbuf_tr
 
   integer,parameter :: DSSeta = 1
   integer,parameter :: DSSomega = 2
@@ -439,7 +436,6 @@ contains
   subroutine Prim_Advec_Init1(par, n_domains)
     use dimensions_mod, only : nlev, qsize, nelemd
     use parallel_mod, only : parallel_t
-    use control_mod, only : use_semi_lagrange_transport
     use interpolate_mod,        only : interpolate_tracers_init
     type(parallel_t) :: par
     integer, intent(in) :: n_domains
@@ -475,33 +471,25 @@ contains
     allocate (qmin(nlev,qsize,nelemd))
     allocate (qmax(nlev,qsize,nelemd))
 
-    if  (use_semi_lagrange_transport) then
-       call initghostbuffer3D(ghostbuf_tr,nlev*qsize,np)
-       call interpolate_tracers_init()
-    endif
-
   end subroutine Prim_Advec_Init1
 
-  subroutine Prim_Advec_Init2(hybrid,fvm_corners, fvm_points)
+  subroutine Prim_Advec_Init2(hybrid)
     use kinds,          only : longdouble_kind
     use dimensions_mod, only : nc
     use derivative_mod, only : derivinit
 
     type (hybrid_t), intent(in) :: hybrid
-    real(kind=longdouble_kind), intent(in) :: fvm_corners(nc+1)
-    real(kind=longdouble_kind), intent(in) :: fvm_points(nc)
 
     ! ==================================
     ! Initialize derivative structure
     ! ==================================
-    call derivinit(deriv(hybrid%ithr),fvm_corners, fvm_points)
+    call derivinit(deriv(hybrid%ithr))
   end subroutine Prim_Advec_Init2
 
 
 !=================================================================================================!
 
   subroutine Prim_Advec_Tracers_remap( elem , deriv , hvcoord , flt , hybrid , dt , tl , nets , nete )
-    use control_mod   , only : use_semi_lagrange_transport
     implicit none
     type (element_t)     , intent(inout) :: elem(:)
     type (derivative_t)  , intent(in   ) :: deriv
@@ -1240,7 +1228,7 @@ contains
 
 
 
-  subroutine vertical_remap(hybrid,elem,fvm,hvcoord,dt,np1,np1_qdp,np1_fvm,nets,nete)
+  subroutine vertical_remap(hybrid,elem,hvcoord,dt,np1,np1_qdp,nets,nete)
   ! This routine is called at the end of the vertically Lagrangian
   ! dynamics step to compute the vertical flux needed to get back
   ! to reference eta levels
@@ -1259,15 +1247,12 @@ contains
   use control_mod, only : rsplit, tracer_transport_type 
   use parallel_mod, only : abortmp
   use hybrid_mod     , only : hybrid_t
-  use derivative_mod, only : interpolate_gll2fvm_points
 #if USE_CUDA_FORTRAN
   use cuda_mod, only: vertical_remap_cuda
 #endif
   use control_mod, only : se_prescribed_wind_2d
 
   type (hybrid_t), intent(in) :: hybrid  ! distributed parallel structure (shared)
-  type(fvm_struct), intent(inout) :: fvm(:)
-  real (kind=real_kind) :: cdp(1:nc,1:nc,nlev,ntrac)
   real (kind=real_kind)  :: psc(nc,nc), dpc(nc,nc,nlev),dpc_star(nc,nc,nlev)
 
   !    type (hybrid_t), intent(in)       :: hybrid  ! distributed parallel structure (shared)
@@ -1275,13 +1260,13 @@ contains
   type (hvcoord_t)                  :: hvcoord
   real (kind=real_kind)             :: dt
 
-  integer :: ie,i,j,k,np1,nets,nete,np1_qdp,np1_fvm
+  integer :: ie,i,j,k,np1,nets,nete,np1_qdp
   integer :: q
   real (kind=real_kind), dimension(np,np,nlev)  :: dp,dp_star
   real (kind=real_kind), dimension(np,np,nlev,2)  :: ttmp
 
 #if USE_CUDA_FORTRAN
-  call vertical_remap_cuda(elem,fvm,hvcoord,dt,np1,np1_qdp,nets,nete)
+  call vertical_remap_cuda(elem,hvcoord,dt,np1,np1_qdp,nets,nete)
   return
 #endif
 

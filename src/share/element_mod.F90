@@ -360,8 +360,6 @@ contains
     do j=1,num
        allocate(elem(j)%desc%putmapP(max_neigh_edges))
        allocate(elem(j)%desc%getmapP(max_neigh_edges))
-       allocate(elem(j)%desc%putmapP_ghost(max_neigh_edges))
-       allocate(elem(j)%desc%getmapP_ghost(max_neigh_edges))
        allocate(elem(j)%desc%reverse(max_neigh_edges))
        allocate(elem(j)%desc%globalID(max_neigh_edges))
        allocate(elem(j)%desc%loc2buf(max_neigh_edges))

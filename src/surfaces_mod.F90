@@ -20,8 +20,7 @@ module surfaces_mod
                                      cube_face_number_from_cart, distance, sphere_tri_area
 
   use parallel_mod, only   : abortmp,  global_shared_buf, global_shared_sum
-  use edge_mod, only       : EdgeBuffer_t, Ghostbuffer3d_t
-  use bndry_mod,    only : ghost_exchangevfull
+  use edge_mod, only       : EdgeBuffer_t
   use dimensions_mod, only : np, ne, nelemd, max_elements_attached_to_node, s_nv
   use global_norms_mod, only: wrap_repro_sum
   use reduction_mod, only : red_sum, parallelmin, parallelmax
@@ -73,7 +72,6 @@ module surfaces_mod
 
   type (ctrlvol_t),    public, allocatable, target  :: cvlist(:)
   type (EdgeBuffer_t), private  :: edge1
-  type (GhostBuffer3D_t)        :: ghost_buf
 
 
   ! User interface
@@ -107,14 +105,13 @@ contains
 
   end function GetVolumeLocal
   subroutine InitControlVolumesData(par,nelemd)
-    use edge_mod, only :   initedgebuffer, initGhostBuffer3d
+    use edge_mod, only :   initedgebuffer
     use parallel_mod, only : parallel_t
     type(parallel_t) :: par
     integer, intent(in) :: nelemd
     ! Cannot be done in a threaded region
     allocate(cvlist(nelemd))
     call initedgebuffer(par,edge1,3)
-    call initGhostBuffer3d(ghost_buf, 3, np+1, 1)
   end subroutine InitControlVolumesData
 
   subroutine VerifyAreas(elem,hybrid,nets,nete)
@@ -174,7 +171,7 @@ contains
 
   subroutine InitControlVolumes_duel(elem, hybrid,nets,nete)
     use bndry_mod,          only : bndry_exchangev
-    use edge_mod,           only : edgeVpack, edgeVunpack, freeedgebuffer, freeghostbuffer3d
+    use edge_mod,           only : edgeVpack, edgeVunpack, freeedgebuffer
     use element_mod,        only : element_t, element_var_coordinates, element_var_coordinates3d
     use hybrid_mod,         only : hybrid_t
 
@@ -295,7 +292,6 @@ contains
     ! Release memory
     if(hybrid%masterthread) then
        call freeedgebuffer(edge1)
-       call FreeGhostBuffer3D(ghost_buf)
     end if
 
     initialized=.true.
@@ -400,7 +396,6 @@ subroutine construct_cv_duel(elem,hybrid,nets,nete)
 !
     use element_mod,  only : element_t
     use hybrid_mod,   only : hybrid_t
-    use edge_mod,     only : ghostVpack3d, ghostVunpack3d
     use parallel_mod, only : abortmp
     use dimensions_mod, only : max_corner_elem
     use control_mod, only : north, south, east, west, neast, nwest, seast, swest
@@ -459,11 +454,7 @@ subroutine construct_cv_duel(elem,hybrid,nets,nete)
              enddo
           enddo
        enddo
-       call ghostVpack3d(ghost_buf, vertpack2, 3, 0, elem(ie)%desc)
     enddo
-
-    call ghost_exchangevfull (hybrid%par,hybrid%ithr, ghost_buf)
-
 
     do ie=nets,nete
        do j=0,np
@@ -485,8 +476,7 @@ subroutine construct_cv_duel(elem,hybrid,nets,nete)
        se2=0
        nw2=0
        ne2=0
-       ! call ghostVunpack3d(ghost_buf, vertunpack2, 3, 0, elem(ie)%desc, sw(-1,-1,:,:),se(np,-1,:,:),nw(-1,np,:,:),ne(np,np,:,:),mlt)
-       call ghostVunpack3d(ghost_buf, vertunpack2, 3, 0, elem(ie)%desc, sw2,se2,nw2,ne2,mlt)
+       
        do j=0,np+2
           do i=0,np+2
              do k=1,3

@@ -6,7 +6,7 @@ module prim_state_mod
   ! ------------------------------
   use kinds, only : real_kind, iulog
   ! ------------------------------
-  use dimensions_mod, only : nlev, np, nc, qsize_d, qsize, nelemd, ntrac, ntrac_d
+  use dimensions_mod, only : nlev, np, nc, qsize_d, qsize, nelemd
   ! ------------------------------
   use parallel_mod, only :  ordered, parallel_t, syncmp
   use parallel_mod, only: global_shared_buf, global_shared_sum
@@ -27,8 +27,6 @@ module prim_state_mod
   use global_norms_mod, only : global_integral, linf_snorm, l1_snorm, l2_snorm
   ! ------------------------------
   use element_mod, only : element_t
-  ! ------------------------------
-  use fvm_control_volume_mod, only : fvm_struct
   ! ------------------------------
   use viscosity_mod, only : compute_zeta_C0
   ! ------------------------------
@@ -76,13 +74,11 @@ contains
   end subroutine prim_printstate_init
 !=======================================================================================================! 
 
-  subroutine prim_printstate(elem, tl,hybrid,hvcoord,nets,nete, fvm)
+  subroutine prim_printstate(elem, tl,hybrid,hvcoord,nets,nete)
     use physical_constants, only : dd_pi
     use control_mod, only : tracer_transport_type
-    use fvm_control_volume_mod, only : n0_fvm, np1_fvm
 
     type (element_t), intent(in) :: elem(:)
-    type (fvm_struct), optional, intent(in) :: fvm(:)
     type (TimeLevel_t), target, intent(in) :: tl
     type (hybrid_t),intent(in)     :: hybrid
     type (hvcoord_t), intent(in)   :: hvcoord
@@ -119,21 +115,15 @@ contains
          dpmin_local(nets:nete), dpmax_local(nets:nete), dpsum_local(nets:nete)
 
 
-    real (kind=real_kind) :: umin_p, vmin_p, tmin_p, qvmin_p(qsize_d), cmin(ntrac_d),&
+    real (kind=real_kind) :: umin_p, vmin_p, tmin_p, qvmin_p(qsize_d),&
          psmin_p, dpmin_p
 
 
-    real (kind=real_kind) :: umax_p, vmax_p, tmax_p, qvmax_p(qsize_d), cmax(ntrac_d),&
+    real (kind=real_kind) :: umax_p, vmax_p, tmax_p, qvmax_p(qsize_d),&
          psmax_p, dpmax_p
 
-    real (kind=real_kind) :: usum_p, vsum_p, tsum_p, qvsum_p(qsize_d), csum(ntrac_d),&
+    real (kind=real_kind) :: usum_p, vsum_p, tsum_p, qvsum_p(qsize_d),&
          pssum_p, dpsum_p
-
-    !
-    ! for fvm diagnostics
-    !
-    real (kind=real_kind) :: psc_mass, psc_min, psc_max,dp_fvm_mass, dp_fvm_min, dp_fvm_max 
-
 
     real (kind=real_kind) :: fusum_p, fvsum_p, ftsum_p, fqsum_p
     real (kind=real_kind) :: fumin_p, fvmin_p, ftmin_p, fqmin_p
@@ -154,9 +144,6 @@ contains
     if (hybrid%masterthread) then 
        write(iulog,*) "nstep=",tl%nstep," time=",Time_at(tl%nstep)/(24*3600)," [day]"
     end if
-    if (.not. present(fvm) .and. ntrac>0) then
-       print *,'ERROR: prim_state_mod.F90: optional fvm argument required if ntrac>0'
-    endif
 
     TOTE     = 0
     KEner    = 0

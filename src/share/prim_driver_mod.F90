@@ -6,7 +6,7 @@
 #define _DBG_
 module prim_driver_mod
   use kinds, only : real_kind, iulog, longdouble_kind
-  use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, ntrac, qsize, nc,nhc
+  use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
   use cg_mod, only : cg_t
   use hybrid_mod, only : hybrid_t
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
@@ -21,9 +21,6 @@ module prim_driver_mod
   use reduction_mod, only : reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
          red_sum, red_sum_int, red_flops, initreductionbuffer
 
-  use fvm_mod, only : fvm_init1,fvm_init2, fvm_init3
-  use fvm_control_volume_mod, only : fvm_struct
-
   use element_mod, only : element_t, timelevels,  allocate_element_desc
   use thread_mod, only : omp_get_num_threads
   implicit none
@@ -32,8 +29,6 @@ module prim_driver_mod
 
   type (cg_t), allocatable  :: cg(:)              ! conjugate gradient struct (nthreads)
   type (quadrature_t)   :: gp                     ! element GLL points
-  real(kind=longdouble_kind)  :: fvm_corners(nc+1)     ! fvm cell corners on reference element
-  real(kind=longdouble_kind)  :: fvm_points(nc)     ! fvm cell centers on reference element
 
 
 #ifndef CAM
@@ -46,14 +41,14 @@ module prim_driver_mod
 
 contains
 
-  subroutine prim_init1(elem, fvm, par, dom_mt, Tl)
+  subroutine prim_init1(elem, par, dom_mt, Tl)
 
     ! --------------------------------
     use thread_mod, only : nthreads, omp_get_thread_num, omp_set_num_threads, &
                            vert_num_threads
     ! --------------------------------
     use control_mod, only : runtype, restartfreq, filter_counter, integration, topology, &
-         partmethod, while_iter, use_semi_lagrange_transport
+         partmethod, while_iter
     ! --------------------------------
     use prim_state_mod, only : prim_printstate_init
     ! --------------------------------
@@ -105,8 +100,6 @@ contains
     ! --------------------------------
     use physical_constants, only : dd_pi
     ! --------------------------------
-    use bndry_mod, only : sort_neighbor_buffer_mapping
-    ! --------------------------------
 #ifndef CAM
     use repro_sum_mod, only: repro_sum, repro_sum_defaultopts, &
          repro_sum_setopts
@@ -116,7 +109,6 @@ contains
 #endif
     implicit none
     type (element_t), pointer :: elem(:)
-     type (fvm_struct), pointer   :: fvm(:)
     type (parallel_t), intent(in) :: par
     type (domain1d_t), pointer :: dom_mt(:)
     type (timelevel_t), intent(out) :: Tl
@@ -301,14 +293,6 @@ contains
 #endif
     endif
 
-    if (ntrac>0) then
-       allocate(fvm(nelemd))
-    else
-       ! Even if fvm not needed, still desirable to allocate it as empty
-       ! so it can be passed as a (size zero) array rather than pointer.
-       allocate(fvm(0))
-    end if
-
     ! ====================================================
     !  Generate the communication schedule
     ! ====================================================
@@ -352,19 +336,6 @@ contains
 
 
     gp=gausslobatto(np)  ! GLL points
-
-    ! fvm nodes are equally spaced in alpha/beta
-    ! HOMME with equ-angular gnomonic projection maps alpha/beta space
-    ! to the reference element via simple scale + translation
-    ! thus, fvm nodes in reference element [-1,1] are a tensor product of
-    ! array 'fvm_corners(:)' computed below:
-    xtmp=nc
-    do i=1,nc+1
-       fvm_corners(i)= 2*(i-1)/xtmp - 1  ! [-1,1] including end points
-    end do
-    do i=1,nc
-       fvm_points(i)= ( fvm_corners(i)+fvm_corners(i+1) ) /2
-    end do
 
     if (topology=="cube") then
        if(par%masterproc) write(iulog,*) "initializing cube elements..."
@@ -515,25 +486,18 @@ contains
     call prim_advance_init(par,integration)
     call Prim_Advec_Init1(par, n_domains)
     call diffusion_init(par)
-    if (ntrac>0) then
-      call fvm_init1(par)
-    endif
 
     ! =======================================================
     ! Allocate memory for subcell flux calculations.
     ! =======================================================
     call allocate_subcell_integration_matrix(np, nc)
 
-    if ( use_semi_lagrange_transport) then
-      call sort_neighbor_buffer_mapping(par, elem,1,nelemd)
-    end if
-
     call TimeLevel_init(tl)
     if(par%masterproc) write(iulog,*) 'end of prim_init'
   end subroutine prim_init1
 !=======================================================================================================!
 
-  subroutine prim_init2(elem, fvm, hybrid, nets, nete, tl, hvcoord)
+  subroutine prim_init2(elem, hybrid, nets, nete, tl, hvcoord)
 
     use parallel_mod, only : parallel_t, haltmp, syncmp, abortmp
     use time_mod, only : timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, nsplit, TimeLevel_Qdp
@@ -548,7 +512,6 @@ contains
          limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
          hypervis_subcycle_q
     use control_mod, only : tracer_transport_type
-    use fvm_control_volume_mod, only : fvm_supercycling
 #ifndef CAM
     use control_mod, only : pertlim                     !used for homme temperature perturbations
 #endif
@@ -558,7 +521,7 @@ contains
     use, intrinsic :: iso_c_binding
 #endif
     use thread_mod, only : nthreads
-    use derivative_mod, only : derivinit, interpolate_gll2fvm_points, v2pinit
+    use derivative_mod, only : derivinit, v2pinit
     use global_norms_mod, only : test_global_integral, print_cfl
     use hybvcoord_mod, only : hvcoord_t
     use prim_advection_mod, only: prim_advec_init2, deriv
@@ -571,13 +534,11 @@ contains
     use aquaplanet, only : aquaplanet_init_state
     use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
 #endif
-    use fvm_control_volume_mod, only : n0_fvm, np1_fvm
 #if USE_CUDA_FORTRAN
     use cuda_mod, only: cuda_mod_init
 #endif
 
     type (element_t), intent(inout) :: elem(:)
-     type (fvm_struct), intent(inout)    :: fvm(:)
     type (hybrid_t), intent(in) :: hybrid
 
     type (TimeLevel_t), intent(inout)    :: tl              ! time level struct
@@ -650,7 +611,7 @@ contains
     ! ==================================
     ! Initialize derivative structure
     ! ==================================
-    call Prim_Advec_Init2(hybrid, fvm_corners, fvm_points)
+    call Prim_Advec_Init2(hybrid)
 
     ! ====================================
     ! In the semi-implicit case:
@@ -794,7 +755,7 @@ contains
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing Jablonowski and Williamson ASP baroclinic instability test'
           end if
-          call asp_baroclinic(elem, hybrid,hvcoord,nets,nete,fvm)
+          call asp_baroclinic(elem, hybrid,hvcoord,nets,nete)
        else if (test_case(1:13) == "jw_baroclinic") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing Jablonowski and Williamson baroclinic instability test V1'
@@ -897,9 +858,6 @@ contains
        ! so only now does HOMME learn the timstep.  print them out:
        write(iulog,'(a,2f9.2)') "dt_remap: (0=disabled)   ",tstep*qsplit*rsplit
 
-       if (ntrac>0) then
-          write(iulog,'(a,2f9.2)') "dt_tracer (fvm)          ",tstep*qsplit*fvm_supercycling
-       end if
        if (qsize>0) then
           write(iulog,'(a,2f9.2)') "dt_tracer (SE), per RK stage: ",tstep*qsplit,(tstep*qsplit)/(rk_stage_user-1)
        end if
@@ -922,7 +880,7 @@ contains
     call cuda_mod_init(elem,hybrid,deriv(hybrid%ithr),hvcoord)
 #endif
     if (hybrid%masterthread) write(iulog,*) "initial state:"
-    call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete, fvm)
+    call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
 
   end subroutine prim_init2
 
@@ -931,7 +889,7 @@ contains
 
 
 
-  subroutine prim_run_subcycle(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
+  subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
 !
 !   advance all variables (u,v,T,ps,Q,C) from time t to t + dt_q
 !
@@ -956,15 +914,12 @@ contains
     use parallel_mod, only : abortmp
     use reduction_mod, only : parallelmax
     use prim_advection_mod, only : vertical_remap
-    use fvm_control_volume_mod, only : n0_fvm
 #if USE_CUDA_FORTRAN
     use cuda_mod, only: copy_qdp_h2d, copy_qdp_d2h
 #endif
 
 
     type (element_t) , intent(inout)        :: elem(:)
-
-    type(fvm_struct), intent(inout) :: fvm(:)
 
     type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
 
@@ -1023,11 +978,11 @@ contains
 #endif
 
     ! take a timestep of trancers and dynamis
-    call prim_step(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
+    call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
 
     ! vertical remap
-    call vertical_remap(hybrid,elem,fvm,hvcoord,dt_remap,tl%np1,np1_qdp,n0_fvm,nets,nete)
+    call vertical_remap(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,nets,nete)
 
 #if USE_CUDA_FORTRAN
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
@@ -1078,7 +1033,6 @@ contains
     ! update dynamics time level pointers
     ! =================================
     call TimeLevel_update(tl,"leapfrog")
-    ! note: time level update for fvm tracers takes place in fvm_mod
 
     ! now we have:
     !   u(nm1)   dynamics at  t+dt_remap - dt       (Robert-filtered)
@@ -1090,7 +1044,7 @@ contains
     ! Print some diagnostic information
     ! ============================================================
     if (compute_diagnostics) then
-       call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete, fvm)
+       call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
     end if
   end subroutine prim_run_subcycle
 
@@ -1099,7 +1053,7 @@ contains
 
 
 
-  subroutine prim_step(elem, fvm, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
+  subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
 !
 !   Take qsplit dynamics steps and one tracer step
 !   for vertically lagrangian option, this subroutine does only the horizontal step
@@ -1120,24 +1074,17 @@ contains
     use hybvcoord_mod, only : hvcoord_t
     use time_mod, only : TimeLevel_t, timelevel_update, nsplit
     use control_mod, only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
-    use control_mod, only : use_semi_lagrange_transport, tracer_transport_type
+    use control_mod, only : tracer_transport_type
     use control_mod, only : tracer_grid_type, TRACER_GRIDTYPE_GLL
-    use fvm_mod,     only : fvm_ideal_test, IDEAL_TEST_OFF, IDEAL_TEST_ANALYTICAL_WINDS
-    use fvm_mod,     only : fvm_test_type, IDEAL_TEST_BOOMERANG, IDEAL_TEST_SOLIDBODY
-    use fvm_bsp_mod, only : get_boomerang_velocities_gll, get_solidbody_velocities_gll
     use prim_advance_mod, only : prim_advance_exp
     use prim_advection_mod, only : prim_advec_tracers_remap, deriv
     use derivative_mod, only : subcell_integration
     use parallel_mod, only : abortmp
     use reduction_mod, only : parallelmax
     use time_mod,    only : time_at
-    use fvm_control_volume_mod, only : fvm_supercycling
 
     type (element_t) , intent(inout)        :: elem(:)
-
-    type(fvm_struct), intent(inout) :: fvm(:)
     type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-
     type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
 
     integer, intent(in)                     :: nets  ! starting thread element number (private)

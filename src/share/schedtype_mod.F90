@@ -9,10 +9,8 @@ module schedtype_mod
      integer                    :: dest
      integer                    :: source
      integer                    :: lengthP
-     integer                    :: lengthP_ghost
      integer                    :: type
      integer                    :: ptrP
-     integer                    :: ptrP_ghost
      type (MetaEdge_t),pointer  :: edge
   end type Cycle_t
 
