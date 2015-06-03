@@ -3,7 +3,7 @@
 #endif
 
 module common_movie_mod
-  use control_mod, only : columnpackage, test_case, max_string_len
+  use control_mod, only : test_case, max_string_len
   use common_io_mod, only : output_start_time, output_end_time, &
        max_output_streams, output_frequency, nf_double, nf_int, &
        max_output_variables
@@ -222,11 +222,7 @@ contains
 ! This gets the default var list for namelist_mod
 !
   subroutine setvarnames(nlvarnames)
-#ifdef _PRIM
-    use aquaplanet_io_mod, only : aq_set_varnames
-    ! ---------------------
-    use physics_io_mod, only : physics_set_varnames
-#endif
+
     character*(*), intent(out) :: nlvarnames(:)
     integer :: lvarcnt
     if (varcnt > max_output_variables) then
@@ -236,14 +232,7 @@ contains
     lvarcnt=varcnt
     nlvarnames(1:varcnt) = varnames
     !print *,__FILE__,__LINE__,varcnt, size(nlvarnames),varnames
-#ifdef _PRIM 
-    if(test_case.eq.'aquaplanet') then
-       call aq_set_varnames(lvarcnt,nlvarnames(lvarcnt+1:))
-    end if
-    if(columnpackage.ne.'none') then
-       call physics_set_varnames(lvarcnt,nlvarnames(lvarcnt+1:))
-    end if
-#endif
+
   end subroutine setvarnames
 !
 ! This function returns the next step number in which an output (either restart or movie) 

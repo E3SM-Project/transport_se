@@ -11,7 +11,6 @@ module prim_driver_mod
   use hybrid_mod, only : hybrid_t
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
 #ifndef CAM
-  use column_types_mod, only : ColumnModel_t
   use prim_restart_mod, only : initrestartfile
   use restart_io_mod , only : RestFile,readrestart
   use Manager
@@ -31,9 +30,6 @@ module prim_driver_mod
   type (quadrature_t)   :: gp                     ! element GLL points
 
 
-#ifndef CAM
-  type (ColumnModel_t), allocatable :: cm(:) ! (nthreads)
-#endif
   type (filter_t)       :: flt             ! Filter struct for v and p grid
   type (filter_t)       :: flt_advection   ! Filter struct for v grid for advection only
   real*8  :: tot_iter
@@ -479,9 +475,7 @@ contains
     ith=0
     nets=1
     nete=nelemd
-#ifndef CAM
-    allocate(cm(0:n_domains-1))
-#endif
+
     allocate(cg(0:n_domains-1))
     call prim_advance_init(par,integration)
     call Prim_Advec_Init1(par, n_domains)
@@ -507,7 +501,7 @@ contains
     use control_mod, only : runtype, integration, filter_mu, filter_mu_advection, test_case, &
          debug_level, vfile_int, filter_freq, filter_freq_advection, &
          transfer_type, vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, &
-         s_bv, topology,columnpackage, moisture, precon_method, rsplit, qsplit, rk_stage_user,&
+         s_bv, topology, moisture, precon_method, rsplit, qsplit, rk_stage_user,&
          sub_case, &
          limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
          hypervis_subcycle_q
@@ -527,11 +521,8 @@ contains
     use prim_advection_mod, only: prim_advec_init2, deriv
 #ifdef CAM
 #else
-    use column_model_mod, only : InitColumnModel
-    use held_suarez_mod, only : hs0_init_state
     use baroclinic_inst_mod, only : binst_init_state, jw_baroclinic
     use asp_tests, only : asp_tracer, asp_baroclinic, asp_rossby, asp_mountain, asp_gravity_wave, dcmip2_schar
-    use aquaplanet, only : aquaplanet_init_state
     use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
 #endif
 #if USE_CUDA_FORTRAN
@@ -667,7 +658,6 @@ contains
     ! HOMME stand alone initialization
     ! =================================
 
-    call InitColumnModel(elem, cm(hybrid%ithr), hvcoord, hybrid, tl,nets,nete,runtype)
     if(runtype >= 1) then
        ! ===========================================================
        ! runtype==1   Exact Restart
@@ -675,16 +665,6 @@ contains
        ! ===========================================================
        if (hybrid%masterthread) then
           write(iulog,*) 'runtype: RESTART of primitive equations'
-       end if
-
-       if (test_case(1:10) == "aquaplanet") then
-          if (hybrid%masterthread) then
-             write(iulog,*)  'Initializing aqua planet with MJO-type forcing'
-          end if
-          if(moisture.eq."dry") then
-             call binst_init_state(elem, hybrid,nets,nete,hvcoord)
-          end if
-          call aquaplanet_init_state(elem, hybrid,hvcoord,nets,nete,integration)
        end if
 
        call ReadRestart(elem,hybrid%ithr,nets,nete,tl)
@@ -761,19 +741,7 @@ contains
              write(iulog,*) 'initializing Jablonowski and Williamson baroclinic instability test V1'
           end if
           call jw_baroclinic(elem, hybrid,hvcoord,nets,nete)
-       else if (test_case(1:12) == "held_suarez0") then
-          if (hybrid%masterthread) then
-             write(iulog,*) 'initializing Held-Suarez primitive equations test'
-          end if
-          call hs0_init_state(elem, hvcoord,nets,nete,300.0_real_kind)
-       else if (test_case(1:10) == "aquaplanet") then
-          if (hybrid%masterthread) then
-             write(iulog,*)  'Initializing aqua planet with MJO-type forcing'
-          end if
-          if(moisture.eq."dry") then
-             call binst_init_state(elem, hybrid,nets,nete,hvcoord)
-          end if
-          call aquaplanet_init_state(elem, hybrid,hvcoord,nets,nete,integration)
+       
        else if (test_case(1:12) == "dcmip2_schar") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing DCMIP2 test 2-0'

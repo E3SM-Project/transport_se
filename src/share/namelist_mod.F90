@@ -66,7 +66,6 @@ module namelist_mod
        smooth_phis_nudt, &
        initial_total_mass, &  ! set > 0 to set the initial_total_mass
        u_perturb,     &          ! J&W bareclinic test perturbation size
-       columnpackage, &
        moisture,      &
        filter_type,   &
        transfer_type, &
@@ -143,27 +142,6 @@ module namelist_mod
 
   use physical_constants, only: omega
 
-#ifdef _PRIM
-  use aquaplanet, only : cool_ampl, &
-       cool_min,      &
-       cool_max,      &
-       qv_flag,       &
-       qv_pert_flag,  &
-       qv_pert_ampl,  &
-       qv_pert_zmin,  &
-       qv_pert_zmax,  &
-       isrf_forc,     &
-       h_dis,         &
-       Cdrag,         &
-       wstar,         &
-       tsurf,         &
-       qsurf,         &
-       u0,            &
-       zabsampl,      &
-       zabsmid,       &
-       zabsmin,       &
-       noisef
-#endif
   use common_movie_mod, only : setvarnames
 
 
@@ -324,7 +302,6 @@ module namelist_mod
                      restartdir,      &       ! name of the restart directory for OUTPUT
                      runtype,         &
                      tstep,           &       ! tracer time step
-                     columnpackage,   &
                      moisture
 #endif
 
@@ -348,27 +325,7 @@ module namelist_mod
     namelist /vert_nl/vform,           &
                       vfile_mid,       &
                       vfile_int
-#ifdef _PRIM
-    namelist /aquaplanet_nl/cool_ampl, &
-                        cool_min,      &
-                        cool_max,      &
-                        qv_flag,       &
-                        qv_pert_flag,  &
-                        qv_pert_ampl,  &
-                        qv_pert_zmin,  &
-                        qv_pert_zmax,  &
-                        isrf_forc,     &
-                        h_dis,         &
-                        Cdrag,         &
-                        wstar,         &
-                        tsurf,         &
-                        qsurf,         &
-                        u0,            &
-                        zabsampl,      &
-                        zabsmid,       &
-                        zabsmin,       &
-                        noisef
-#endif
+
     namelist /analysis_nl/    &
          output_prefix,       &
          output_timeunits,    &
@@ -458,7 +415,6 @@ module namelist_mod
     tasknum       =-1
     integration   = "explicit"
     moisture      = "dry"
-    columnpackage = "none"
     nu_top=0
     initial_total_mass=0
     mesh_file='none'
@@ -619,13 +575,11 @@ module namelist_mod
 #endif
 #ifdef _PRIM
        write(iulog,*)"reading physics namelist..."
-       if (test_case=="held_suarez0" .or. &
-           test_case(1:5)=="dcmip" .or. &
+       if (test_case(1:5)=="dcmip" .or. &
            test_case(1:10)=="baroclinic" .or. &
            test_case(1:13)=="jw_baroclinic" .or. &
            test_case(1:12)=="dcmip2_schar" .or. &
-           test_case(1:4)=="asp_" .or. &
-           test_case(1:10)=="aquaplanet") then
+           test_case(1:4)=="asp_") then
          write(iulog,*) "reading vertical namelist..."
 #if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
          read(unit=7,nml=vert_nl)
@@ -642,34 +596,6 @@ module namelist_mod
          write(iulog,*) '  vfile_int=',vfile_int
 
          write(iulog,*)"reading aquaplanet namelist..."
-         if(test_case(1:10)=="aquaplanet") then
-            cool_ampl     =  -1.5D0
-            cool_min      =  12.0D0
-            cool_max      =  15.0D0
-            qv_flag       =  0
-            qv_pert_flag  =  1
-            qv_pert_ampl  =  0.1D0
-            qv_pert_zmin  =  2.0D3
-            qv_pert_zmax  = 18.0D3
-            isrf_forc     =  1
-            h_dis         =  0.5D3
-            Cdrag         =  1.0D-3
-            wstar         =  1.0D0
-            tsurf         =  300.D0
-            qsurf         =  20.D-3
-            u0            =  0.D0
-            zabsampl      =  0.333D0
-            zabsmid       = 63.0D3
-            zabsmin       =  0.0D3
-            noisef        =  0
-
-#if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
-           read(unit=7,nml=aquaplanet_nl)
-#else
-           read(*,nml=aquaplanet_nl)
-#endif
-
-         end if
 
        end if
 #endif
@@ -904,7 +830,6 @@ module namelist_mod
     call MPI_bcast(LFTfreq,1,MPIinteger_t ,par%root,par%comm,ierr)
     call MPI_bcast(prescribed_wind,1,MPIinteger_t ,par%root,par%comm,ierr)
     call MPI_bcast(moisture,MAX_STRING_LEN,MPIChar_t ,par%root,par%comm,ierr)
-    call MPI_bcast(columnpackage,MAX_STRING_LEN,MPIChar_t ,par%root,par%comm,ierr)
 
     call MPI_bcast(restartfile,MAX_STRING_LEN,MPIChar_t ,par%root,par%comm,ierr)
     call MPI_bcast(restartdir,MAX_STRING_LEN,MPIChar_t ,par%root,par%comm,ierr)
@@ -937,29 +862,7 @@ module namelist_mod
     call MPI_bcast(vfile_int,MAX_STRING_LEN,MPIChar_t  ,par%root,par%comm,ierr)
     call MPI_bcast(se_prescribed_wind_2d,1 ,MPIlogical_t  ,par%root,par%comm,ierr)
 #ifndef CAM
-#ifdef _PRIM
-    if(test_case(1:10)=="aquaplanet") then
-       call  MPI_bcast(cool_ampl     ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call  MPI_bcast(cool_min      ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call  MPI_bcast(cool_max      ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call  MPI_bcast(qv_pert_ampl  ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call  MPI_bcast(qv_pert_zmin  ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call  MPI_bcast(qv_pert_zmax  ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(qv_flag        ,1,MPIinteger_t,par%root,par%comm,ierr)
-       call MPI_bcast(qv_pert_flag   ,1,MPIinteger_t,par%root,par%comm,ierr)
-       call MPI_bcast(isrf_forc      ,1,MPIinteger_t,par%root,par%comm,ierr)
-       call MPI_bcast(h_dis          ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(Cdrag          ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(wstar          ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(tsurf          ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(qsurf          ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(u0             ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(zabsampl       ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(zabsmid        ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(zabsmin        ,1,MPIreal_t   ,par%root,par%comm,ierr)
-       call MPI_bcast(noisef         ,1,MPIinteger_t,par%root,par%comm,ierr)
-    end if
-#endif
+
     call MPI_bcast(output_prefix,MAX_STRING_LEN,MPIChar_t  ,par%root,par%comm,ierr)
     call MPI_bcast(output_timeunits ,max_output_streams,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(output_start_time ,max_output_streams,MPIinteger_t,par%root,par%comm,ierr)
@@ -1275,29 +1178,7 @@ module namelist_mod
        end if
        endif
 #ifndef CAM
-#ifdef _PRIM
-       write(iulog,*)"cooling:  cool_ampl             = ", cool_ampl
-       write(iulog,*)"cooling:  cool_min              = ", cool_min
-       write(iulog,*)"cooling:  cool_max              = ", cool_max
-       write(iulog,*)"moisture: qv_flag               = ", qv_flag
-       write(iulog,*)"moisture: qv_pert_flag          = ", qv_pert_flag
-       write(iulog,*)"moisture: qv_pert_ampl          = ", qv_pert_ampl
-       write(iulog,*)"moisture: qv_pert_zmin          = ", qv_pert_zmin
-       write(iulog,*)"moisture: qv_pert_zmax          = ", qv_pert_zmax
-       write(iulog,*)"surface:  isrf_forc             = ", isrf_forc
-       write(iulog,*)"surface:  h_dis                 = ", h_dis
-       write(iulog,*)"surface:  Cdrag                 = ", Cdrag
-       write(iulog,*)"surface:  wstar                 = ", wstar
-       write(iulog,*)"surface:  tsurf                 = ", tsurf
-       write(iulog,*)"surface:  qsurf                 = ", qsurf
-       write(iulog,*)"wind:     u0                    = ", u0
-       write(iulog,*)"absorber: zabsampl              = ", zabsampl
-       write(iulog,*)"absorber: zabsmid               = ", zabsmid
-       write(iulog,*)"absorber: zabsmin               = ", zabsmin
-       write(iulog,*)"noise   : noisef  0 off,  >0 on = ", noisef
-       write(iulog,*)"noise   : noisef>0 indicate nr of first grid point "
-       write(iulog,*)"noise   : to which noise function is applied       "
-#endif
+
        write(iulog,*)"  analysis: output_prefix = ",TRIM(output_prefix)
        write(iulog,*)"  analysis: io_stride = ",io_stride
        write(iulog,*)"  analysis: num_io_procs = ",num_io_procs

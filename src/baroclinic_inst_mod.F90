@@ -418,37 +418,30 @@ endif
        avg(k) = real(global_integral(elem, t1(:,:,nets:nete),hybrid,nptsp,nets,nete))
 
     end do
-    if(test_case.eq."aquaplanet") then
-       do k=1,nlev
-          do ie=nets,nete
-             elem(ie)%state%T(:,:,k,nm1)=elem(ie)%state%T(:,:,k,n0)
-             elem(ie)%state%T(:,:,k,np1)=0.0D0
-          end do
-       end do
-    else
-       do k=1,nlev
-          do ie=nets,nete
-             do j=1,nptsp
-                do i=1,nptsp
 
-                   lonp = elem(ie)%spherep(i,j)%lon
-                   latp = elem(ie)%spherep(i,j)%lat
+     do k=1,nlev
+        do ie=nets,nete
+           do j=1,nptsp
+              do i=1,nptsp
 
-                   elem(ie)%state%T(i,j,k,n0) = elem(ie)%state%T(i,j,k,n0) + tfull(k) - avg(k)
+                 lonp = elem(ie)%spherep(i,j)%lon
+                 latp = elem(ie)%spherep(i,j)%lat
 
-                   elem(ie)%state%T(i,j,k,n0)=elem(ie)%state%T(i,j,k,n0) + &
-                        1.D0/cosh(3.D0*(lonp-DD_PI*0.5D0))**2 * &
-                        1.D0/cosh(6.D0*(latp-DD_PI*0.25D0))**2
+                 elem(ie)%state%T(i,j,k,n0) = elem(ie)%state%T(i,j,k,n0) + tfull(k) - avg(k)
 
-                end do
-             end do
+                 elem(ie)%state%T(i,j,k,n0)=elem(ie)%state%T(i,j,k,n0) + &
+                      1.D0/cosh(3.D0*(lonp-DD_PI*0.5D0))**2 * &
+                      1.D0/cosh(6.D0*(latp-DD_PI*0.25D0))**2
 
-             elem(ie)%state%T(:,:,k,nm1)=elem(ie)%state%T(:,:,k,n0)
-             elem(ie)%state%T(:,:,k,np1)=elem(ie)%state%T(:,:,k,n0)
+              end do
+           end do
 
-          end do
-       end do
-    endif
+           elem(ie)%state%T(:,:,k,nm1)=elem(ie)%state%T(:,:,k,n0)
+           elem(ie)%state%T(:,:,k,np1)=elem(ie)%state%T(:,:,k,n0)
+
+        end do
+     end do
+
 
     do ie=nets,nete
        do k=1,nlev

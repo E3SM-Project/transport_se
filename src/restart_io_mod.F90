@@ -29,11 +29,7 @@ module restart_io_mod
    !------------------
    use element_mod, only: elem_state_t, element_t
    !------------------
-   use control_mod, only : restartdir, restartfile, columnpackage
-   !------------------
-#ifdef _PRIM
-   use physics_types_mod, only : physics_state_t, pelem
-#endif
+   use control_mod, only : restartdir, restartfile
    !------------------
    use schedtype_mod, only : Schedule
    !------------------
@@ -73,25 +69,6 @@ module restart_io_mod
 
    integer, parameter :: RESTART_HDR_CNT = 12 
 
-
-   ! MT 2010:  note: when using COLLECTIVE IO, the code we have now, 
-   ! the offset between elements in 
-   ! RestartBuffer must match the offset used in the restart file.
-   ! This means for non-Emanual physics restarts, puffer cannot be 
-   ! included in the RestartBuffer_t struct below.  
-   !
-   ! I tried to include the pelem() data in the restart file for all
-   ! cases, including non-Emanual physics like Held-Suarez run, 
-   ! but the code was crashing when creating the first MPI type, maybe because
-   ! pelem() has not been initialized. 
-   !
-   ! best solution would be to modify the code to allow a larger offset
-   ! between elements in RestartBuffer than in the file
-   ! for now, disable restart when running Emanual physics.  
-   ! 
-   ! Emanual restart can be re-enabled by turning of COLLECTIVE IO 
-   ! and adding the puffer struct back in below (change PRIMXXX back to PRIM)
-   !
    type, public :: RestartBuffer_t
       type (elem_state_t)        :: buffer
 #ifdef _PRIMXXX
@@ -288,11 +265,9 @@ endif
 #endif
 !	print *, __FILE__,__LINE__,ie,ig,sizeof(variable(ie))
 
-        if(columnpackage == "emanuel")then
-   	  write(56,rec=ig) variable(ie)
-        else
+
 	  write(56,rec=ig) variable(ie)%buffer
-	endif
+
      enddo
      close(56)
 #endif
@@ -406,11 +381,9 @@ endif
 #else
        ig = Schedule(1)%Local2Global(ie)
 #endif
-         if(columnpackage == "emanuel")then
-           read(56,rec=ig) variable(ie)
-	 else
+
            read(56,rec=ig) variable(ie)%buffer
-         endif
+
      enddo
      close(56)
 #endif
@@ -662,11 +635,7 @@ endif
 
     do ie=nets,nete
        RestartBuffer(ie)%buffer = elem(ie)%state
-#ifdef _PRIMXXX
-       if(columnpackage == "emanuel") then
-         RestartBuffer(ie)%puffer = pelem(ie)%state
-       endif
-#endif
+
     enddo
 
 !$OMP BARRIER
@@ -711,11 +680,7 @@ endif
 !$OMP BARRIER
     do ie=nets,nete
        elem(ie)%state = RestartBuffer(ie)%buffer
-#ifdef _PRIMXXX
-       if(columnpackage == "emanuel")then
-          pelem(ie)%state = RestartBuffer(ie)%puffer
-       endif
-#endif
+
     enddo
 
 

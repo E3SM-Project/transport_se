@@ -27,7 +27,7 @@ module prim_movie_mod
   ! ---------------------
   use control_mod, only : test_case, runtype, accumstart, &
        accumstop, accumfreq, restartfreq, &
-       integration, columnpackage, hypervis_power
+       integration, hypervis_power
   ! ---------------------
   use common_io_mod, only : &
        output_start_time,   &
@@ -59,10 +59,6 @@ module prim_movie_mod
   use coordinate_systems_mod, only : cartesian2D_t, spherical_polar_t, cartesian3D_t, spherical_to_cart
   ! ---------------------
   use physical_constants, only : g, kappa, p0, dd_pi
-  ! ---------------------
-  use aquaplanet_io_mod, only : aq_movie_init, aq_movie_output, aq_set_varnames
-  ! ---------------------
-  use physics_io_mod, only : physics_movie_init, physics_movie_output, physics_set_varnames
   ! ---------------------
   use dof_mod, only : UniquePoints, UniqueCoords, UniqueNcolsP, createmetadata
   ! ---------------------
@@ -266,14 +262,6 @@ contains
     call nf_variable_attributes(ncdf, 'hybm','hybrid B coefficiet at layer midpoints' ,'dimensionless') 
     call nf_variable_attributes(ncdf, 'hyai','hybrid A coefficiet at layer interfaces' ,'dimensionless') 
     call nf_variable_attributes(ncdf, 'hybi','hybrid B coefficiet at layer interfaces' ,'dimensionless') 
-
-
-    if(test_case.eq.'aquaplanet') then
-       call aq_movie_init(ncdf)
-    end if
-    if(columnpackage.ne.'none') then
-       call physics_movie_init(ncdf)
-    end if
 
     call nf_output_init_complete(ncdf)
 
@@ -674,12 +662,7 @@ contains
                 end do
                 call nf_put_var(ncdf(ios),var3d,start, count, name='omega')
              end if
-             if(test_case.eq.'aquaplanet') then
-                call aq_movie_output(ncdf(ios), elem, output_varnames,nxyp, nlev)
-             end if
-             if(columnpackage.ne.'none') then
-                call physics_movie_output(ncdf(ios),elem, output_varnames, nxyp)
-             end if
+             
 !             call PIO_SetDebugLevel(3)
              call nf_put_var(ncdf(ios),real(dayspersec*time_at(tl%nstep),kind=real_kind),&
                   start(3:3),count(3:3),name='time')

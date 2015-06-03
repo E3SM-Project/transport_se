@@ -106,7 +106,6 @@ module control_mod
   character(len=MAX_STRING_LEN)    , public :: restartfile 
   character(len=MAX_STRING_LEN)    , public :: restartdir
 
-  character(len=MAX_STRING_LEN)    , public :: columnpackage
   character(len=MAX_STRING_LEN)    , public :: moisture
   
   integer              , public :: maxits         ! max iterations of solver

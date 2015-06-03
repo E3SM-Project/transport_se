@@ -16,10 +16,6 @@ module prim_restart_mod
         StateDesc_t, createstatedescriptor, AddStateField, constructelementfile, &
         collective_io_read, collective_io_write, printstatedescriptor
    !------------------
-   use control_mod, only : columnpackage
-   !------------------
-   use physics_types_mod, only : pelem, physstatecomponents
-   !------------------
    implicit none
 
 private 
@@ -75,10 +71,6 @@ contains
     !================================================================
     NumComponents = StateComponents     !  number of variable components in the state buffer
 
-    if(columnpackage .eq. "emanuel") then
-      NumComponents = NumComponents+PhysStateComponents
-    endif	
-
     RestDesc = CreateStateDescriptor(NumComponents)
 
     type = MPIReal_t       !  All the types are Real
@@ -107,13 +99,6 @@ contains
 
     len = SIZE(state%dp3d)
     call AddStateField(RestDesc,len,type)
-
-    if(columnpackage .eq. "emanuel") then
-       ! see comments in restart_io_mod.F90
-       !call abortmp('Error: restart w/ Emanual physics currently broken')
-       len = SIZE(pelem(1)%state%CBMF)
-       call AddStateField(RestDesc,len,type)
-    end if
 
 #if defined(_MPI) && defined(_PRESTART)
     if(Debug) call PrintStateDescriptor(RestDesc)
