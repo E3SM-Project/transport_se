@@ -84,7 +84,6 @@ else
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
    -DPREQX_USE_PIO=FALSE        \
-   -DBUILD_HOMME_SWDGX=FALSE    \
    -DBUILD_HOMME_SWEQX=FALSE    \
    -DENABLE_OPENMP=TRUE         \
    $REPO

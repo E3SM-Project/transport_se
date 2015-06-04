@@ -617,8 +617,6 @@ contains
                    do k=1,nlev
 #ifdef _PRIM
                       var3d(:,:,k,1) = 0  ! need to compute PHI from hydrostatic relation
-#elif defined _SWDG
-                      var3d(:,:,k,1) = elem(ie)%state%ht(:,:,k)
 #else
                       if(test_case.eq.'vortex') then
                          var3d(:,:,k,1) = elem(ie)%state%p(:,:,k,n0)
@@ -657,8 +655,6 @@ contains
                       var3d(:,:,k,ie) = 0
 #ifdef _PRIM
                       var3d(:,:,k,ie) = elem(ie)%state%ps_v(:,:,n0)
-#elif defined _SWDG
-                      var3d(:,:,k,ie) = 0  ! set this to surface pressure
 #else
                       var3d(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0)
 #endif

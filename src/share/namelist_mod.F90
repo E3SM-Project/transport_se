@@ -142,22 +142,6 @@ module namelist_mod
 #endif
   use interpolate_mod, only : set_interp_parameter, get_interp_parameter
 
-!=======================================================================================================!
-!    Adding for SW DG                                                                                   !
-!=======================================================================================================!
-#ifdef _SWDG
-  ! ------------------------
-  use dg_flux_mod, only: riemanntype
-  ! ------------------------
-  use dg_tests_mod, only : alpha_dg, alphatype
-  ! ------------------------
-  use dg_sweq_mod, only: stage_rk
-  ! ------------------------
-  use physical_constants, only: dd_pi
-  ! ------------------------
-#endif
-
-!=======================================================================================================!
   implicit none
   private
 !
@@ -342,22 +326,6 @@ module namelist_mod
         interp_type,          &
         interpolate_analysis
 
-!=======================================================================================================!
-!   Adding for SW DG                                                                                    !
-!=======================================================================================================!
-#ifdef _SWDG
-    namelist /dg_nl/  &
-        riemanntype,  &
-        alphatype,    &
-        alpha_dg,     &
-        stage_rk
-!=======================================================================================================!
-    riemanntype= 0
-    alphatype= 0
-    alpha_dg = 0.0D0
-    stage_rk = 3
-#endif
-!=======================================================================================================!
     ! ==========================
     ! Set the default partmethod
     ! ==========================
@@ -638,29 +606,6 @@ module namelist_mod
           endif
        end do
 
-
-!=======================================================================================================!
-!     Adding for SW DG                                                                                  !
-!=======================================================================================================!
-#ifdef _SWDG
-      write(iulog,*)"reading dg namelist..."
-#if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
-      read(unit=7,nml=dg_nl)
-#else
-      read(*,nml=dg_nl)
-#endif
-    if (alphatype==0) then
-       alpha_dg= 0.0D0
-    elseif (alphatype==1) then
-       alpha_dg= DD_PI
-    elseif (alphatype==2) then
-       alpha_dg= DD_PI/2.0D0
-    elseif (alphatype==4) then
-       alpha_dg= DD_PI/4.0D0
-    endif
-#endif
-!=======================================================================================================!
-
 #if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
        close(unit=7)
 #endif
@@ -921,19 +866,6 @@ module namelist_mod
           call abortmp('prescribed_wind should be either 0 or 1')
     endif
 
-
-!=======================================================================================================!
-!   Adding for SW DG                                                                                    !
-!=======================================================================================================!
-#ifndef CAM
-#ifdef _SWDG
-    call MPI_bcast(riemanntype,1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(alphatype,1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(alpha_dg,1,MPIreal_t,par%root,par%comm,ierr)
-    call MPI_bcast(stage_rk,1,MPIinteger_t,par%root,par%comm,ierr)
-#endif
-#endif
-!=======================================================================================================!
 #ifdef CAM
     nmpi_per_node=1
 #endif
@@ -1139,16 +1071,6 @@ module namelist_mod
           write(iulog,*)" analysis interp gridtype = ",interp_gridtype
           write(iulog,*)" analysis interpolation type = ",interp_type
        end if
-!=======================================================================================================!
-!      Adding for SW DG                                                                                 !
-!=======================================================================================================!
-#ifdef _SWDG
-       write(iulog,*)'dg: riemanntype=',riemanntype
-       write(iulog,*)'dg: alphatype=',alphatype
-       write(iulog,*)'dg: alpha    =',alpha_dg
-       write(iulog,*)'dg: staqge_rk=',stage_rk
-#endif
-!=======================================================================================================!
     endif
 
   end subroutine readnl
