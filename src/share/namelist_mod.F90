@@ -81,38 +81,27 @@ module namelist_mod
        vfile_mid,       &
        vfile_int,       &
        vert_remap_q_alg, &
-#ifndef CAM
        pertlim,      &
        tracer_transport_type,           &
        TRACERTRANSPORT_SE_GLL,          &
        tracer_grid_type,                &
        TRACER_GRIDTYPE_GLL,             &
-#endif
        test_cfldep, &
        se_prescribed_wind_2d
-      
-
-#if ( defined CAM )
-  use control_mod, only: se_met_nudge_u, se_met_nudge_p, se_met_nudge_t, se_met_tevolve
-#endif
 
   !-----------------
   use thread_mod, only : nthreads, nthreads_accel, omp_get_max_threads, vert_num_threads
   !-----------------
   use dimensions_mod, only : ne, np, npdg, nnodes, nmpi_per_node, npart, qsize, qsize_d, set_mesh_dimensions
   !-----------------
-#ifdef CAM
-  use time_mod, only : nsplit, smooth, phys_tscale
-#else
   use time_mod, only : tstep, ndays,nmax, nendstep,secpday, smooth, secphr, nsplit, phys_tscale
-#endif
   !-----------------
   use parallel_mod, only : parallel_t,  iam, abortmp, &
        partitionfornodes, useframes, mpireal_t, mpilogical_t, mpiinteger_t, mpichar_t
   !-----------------
 
   use interpolate_mod, only : vector_uvars, vector_vvars, max_vecvars, interpolate_analysis, replace_vec_by_vordiv
-#ifndef CAM
+
   use common_io_mod, only : &
        output_prefix,       &
        output_type,         &
@@ -138,8 +127,6 @@ module namelist_mod
 
   use common_movie_mod, only : setvarnames
 
-
-#endif
   use interpolate_mod, only : set_interp_parameter, get_interp_parameter
 
   implicit none
@@ -156,15 +143,9 @@ module namelist_mod
 !  Read in the namelists...
 !
 ! ============================================
-#ifdef CAM
-  subroutine readnl(par, NLFileName)
-    use units, only : getunit, freeunit
-    use mesh_mod, only : MeshOpen
-    character(len=*), intent(in) :: NLFilename  ! Namelist filename
-#else
+
   subroutine readnl(par)
     use mesh_mod, only : MeshOpen
-#endif
     type (parallel_t), intent(in) ::  par
     character(len=MAX_FILE_LEN) :: mesh_file
     integer :: se_ftype, se_limiter_option
@@ -174,32 +155,14 @@ module namelist_mod
     integer  :: ierr
     character(len=80) :: errstr, arg
     real(kind=real_kind) :: dt_max
-#ifdef CAM
-    character(len=MAX_STRING_LEN) :: se_topology
-    integer :: se_partmethod
-    integer :: se_ne
-    integer :: unitn
-    character(len=*), parameter ::  subname = "homme:namelist_mod"
-! These items are only here to keep readnl from crashing. Remove when possible
-    integer :: se_fv_nphys
-    character(len=80)  :: se_write_phys_grid
-    character(len=256) :: se_phys_grid_file
-#endif
-#ifndef CAM
     character(len=32) :: tracer_transport_method = 'se_gll'
-#endif
+
     ! ============================================
     ! Namelists
     ! ============================================
 
     namelist /ctl_nl/ PARTMETHOD,    &       ! Mesh partitioning method (METIS)
                       TOPOLOGY,      &       ! Mesh topology
-#ifdef CAM
-                     se_partmethod,    &
-                     se_topology,      &
-                     se_ne,            &
-                     se_limiter_option, &
-#else
                      qsize,         &       ! number of SE tracers
                      nthreads,      &       ! Number of threads per process
                      vert_num_threads,      &       ! Number of threads per process
@@ -208,8 +171,7 @@ module namelist_mod
                      smooth,        &        ! Timestep Filter
                      omega,         &
                      pertlim,        &        !temperature initial perturbation
-         tracer_transport_method, &
-#endif
+                     tracer_transport_method, &
                      npart,         &
                      uselapi,       &
                      multilevel,    &
@@ -262,15 +224,6 @@ module namelist_mod
                      vert_remap_q_alg, &
                      se_prescribed_wind_2d
 
-#ifdef CAM
-    namelist  /ctl_nl/ SE_NSPLIT,  &       ! number of dynamics steps per physics timestep
-                       se_phys_tscale, &
-! These items are only here to keep readnl from crashing. Remove when possible
-                       se_fv_nphys,    &      ! Linear size of FV physics grid
-                       se_write_phys_grid, &  ! Write physics grid file if .true.
-                       se_phys_grid_file      ! Physics grid filename
-    namelist  /ctl_nl/ se_met_nudge_u, se_met_nudge_p, se_met_nudge_t, se_met_tevolve
-#else
     namelist /ctl_nl/test_case,       &       ! test case
                      sub_case,        &       ! generic test case parameter
                      nmax,            &       ! number of steps
@@ -281,7 +234,6 @@ module namelist_mod
                      runtype,         &
                      tstep,           &       ! tracer time step
                      moisture
-#endif
 
     namelist /filter_nl/filter_type,   &
                         transfer_type, &
@@ -294,7 +246,6 @@ module namelist_mod
                         wght_fm,       &
                         kcut_fm       
 
-#ifndef CAM
     namelist /vert_nl/vform,           &
                       vfile_mid,       &
                       vfile_int
@@ -318,8 +269,8 @@ module namelist_mod
          output_varnames3,    &
          output_varnames4,    &
          output_varnames5
-#endif
-    namelist /analysis_nl/    &
+
+     namelist /analysis_nl/    &
         interp_nlat,          &
         interp_nlon,          &
         interp_gridtype,      &
@@ -335,22 +286,7 @@ module namelist_mod
     useframes     = 0
     multilevel    = 1
     uselapi       = .TRUE.
-#ifdef CAM
-    ! set all CAM defaults
-    ! CAM requires forward-in-time, subcycled dynamics
-    ! RK2 3 stage tracers, sign-preserving conservative
-    tstep_type              = 1      ! forward-in-time RK methods
-    qsplit=4; rk_stage_user=3
-    se_limiter_option=4
-    se_ftype = 2
-    energy_fixer = -1      ! no fixer, non-staggered-in-time formulas
-    se_partmethod = -1
-    se_ne       = -1
-    se_topology = 'none'
-    se_phys_tscale=0
-    se_nsplit = 1
-    qsize = qsize_d
-#else
+
     ndays         = 0
     nmax          = 12
     nthreads = 1
@@ -360,7 +296,7 @@ module namelist_mod
     phys_tscale=0
     nsplit = 1
     pertlim = 0.0_real_kind
-#endif
+
     sub_case      = 1
     numnodes      = -1
     restartfreq   = -100
@@ -389,21 +325,8 @@ module namelist_mod
     if (par%masterproc) then
 
        write(iulog,*)"reading ctl namelist..."
-#if defined(CAM)
-       unitn=getunit()
-       open( unitn, file=trim(nlfilename), status='old' )
-       ierr = 1
-       do while ( ierr /= 0 )
-          read (unitn,ctl_nl,iostat=ierr)
-          if (ierr < 0) then
-            write(6,*) 'ierr =',ierr
-             call abortmp( subname//':: namelist read returns an'// &
-                  ' end of file or end of record condition' )
-          end if
-       end do
-       close( unitn )
-       call freeunit( unitn )
-#elif defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
+
+#if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
        open(unit=7,file="input.nl",status="OLD")
        read(unit=7,nml=ctl_nl)
 #else
@@ -433,7 +356,6 @@ module namelist_mod
        ! moviefreq and restartfreq are interpreted to be in units of days.
        ! Both must be converted to numbers of steps.
        ! ================================================
-#ifndef CAM
        if (tstep <= 0) then
           call abortmp('tstep must be > 0')
        end if
@@ -442,7 +364,6 @@ module namelist_mod
           restartfreq  = restartfreq*(secpday/tstep)
        end if
        nEndStep = nmax
-#endif
 
        if((integration .ne. "explicit").and.(integration .ne. "runge_kutta")) then
           call abortmp('integration must be explicit or runge_kutta')
@@ -453,22 +374,8 @@ module namelist_mod
        filter_mu_advection   = 0.05_real_kind
        filter_freq_advection = 0
        filter_freq=0
-#if defined(CAM)
-! cam no longer expects filter_nl
-!       unitn=getunit()
-!       open( unitn, file=trim(nlfilename), status='old' )
-!       ierr = 1
-!       do while ( ierr /= 0 )
-!          read (unitn,filter_nl,iostat=ierr)
-!          if (ierr < 0) then
-!             call abortmp( subname//':: namelist read returns an'// &
-!                  ' end of file or end of record condition' )
-!          end if
-!       end do
-!       close( unitn )
-!       call freeunit( unitn )
 
-#elif defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
+#if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
        read(unit=7,nml=filter_nl)
 #else
        read(*,nml=filter_nl)
@@ -476,7 +383,6 @@ module namelist_mod
        !
        ! A modulo(a,p) where p == 0 is undefined
        if(filter_freq == 0) filter_freq = -1
-#ifndef CAM
 
        write(iulog,*)"reading physics namelist..."
        if (test_case(1:5)=="dcmip" .or. &
@@ -502,7 +408,7 @@ module namelist_mod
          write(iulog,*)"reading aquaplanet namelist..."
 
        end if
-#endif
+
 !      Default interpolation grid  (0 = auto compute based on ne,nv)  interpolation is off by default
 #ifdef PIO_INTERP
        interpolate_analysis=.true.
@@ -522,7 +428,6 @@ module namelist_mod
        vector_vvars(1:12) = (/ &
             'V         ','VBOT      ','V200      ','V250      ','V850      ','FV        ',&
             'CONVV     ','DIFFV     ','VTGWORO   ','VFLX      ','MET_V     ','MET_V_tend' /)
-#ifndef CAM
        infilenames(:) = ''
        output_prefix = ""
        output_start_time=0
@@ -542,23 +447,9 @@ module namelist_mod
        num_io_procs=0
        output_type = 'netcdf' ! Change by MNL
 !     output_type = 'pnetcdf'
-#endif
 
        write(iulog,*)"reading analysis namelist..."
-#if defined(CAM)
-       unitn=getunit()
-       open( unitn, file=trim(nlfilename), status='old' )
-       ierr = 1
-       do while ( ierr > 0 )
-          read (unitn,analysis_nl,iostat=ierr)
-          if (ierr < 0) then
-             print *,'analysis_nl namelist read returns an'// &
-                  ' end of file or end of record condition, ignoring.'
-          end if
-       end do
-       close( unitn )
-       call freeunit( unitn )
-#else
+
 #if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
        read(unit=7,nml=analysis_nl)
 #else
@@ -607,14 +498,7 @@ module namelist_mod
 #if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
        close(unit=7)
 #endif
-#endif
     end if
-
-#ifdef CAM
-    if(se_partmethod /= -1) partmethod = se_partmethod
-    if(se_ne /= -1) ne = se_ne
-    if(se_topology .ne. 'none') topology = se_topology
-#endif
 
     call MPI_barrier(par%comm,ierr)
 
@@ -643,11 +527,7 @@ module namelist_mod
     call MPI_bcast(multilevel ,1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(useframes ,1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(runtype   ,1,MPIinteger_t,par%root,par%comm,ierr)
-#ifdef CAM
-    phys_tscale = se_phys_tscale
-    limiter_option  = se_limiter_option
-    nsplit = se_nsplit
-#else
+
     call MPI_bcast(omega     ,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(pertlim   ,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(tstep     ,1,MPIreal_t   ,par%root,par%comm,ierr)
@@ -658,8 +538,7 @@ module namelist_mod
     call MPI_bcast(ndays     ,1,MPIinteger_t,par%root,par%comm,ierr)
 
     nEndStep = nmax
-#endif
-    call MPI_bcast(smooth    ,1,MPIreal_t   ,par%root,par%comm,ierr)
+call MPI_bcast(smooth    ,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(phys_tscale,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(NSPLIT,1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(limiter_option  ,1,MPIinteger_t   ,par%root,par%comm,ierr)
@@ -675,13 +554,6 @@ module namelist_mod
     call MPI_bcast(nu_div       ,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(nu_p         ,1,MPIreal_t   ,par%root,par%comm,ierr)
     call MPI_bcast(nu_top   ,1,MPIreal_t   ,par%root,par%comm,ierr)
-
-#if ( defined CAM )
-    call MPI_bcast(se_met_nudge_u, 1, MPIreal_t, par%root,par%comm,ierr)
-    call MPI_bcast(se_met_nudge_p, 1, MPIreal_t, par%root,par%comm,ierr)
-    call MPI_bcast(se_met_nudge_t, 1, MPIreal_t, par%root,par%comm,ierr)
-    call MPI_bcast(se_met_tevolve, 1, MPIinteger_t, par%root,par%comm,ierr)
-#endif
 
     call MPI_bcast(disable_diagnostics,1,MPIlogical_t,par%root,par%comm,ierr)
     call MPI_bcast(psurf_vis,1,MPIinteger_t   ,par%root,par%comm,ierr)
@@ -735,7 +607,6 @@ module namelist_mod
     call MPI_bcast(vfile_mid,MAX_STRING_LEN,MPIChar_t  ,par%root,par%comm,ierr)
     call MPI_bcast(vfile_int,MAX_STRING_LEN,MPIChar_t  ,par%root,par%comm,ierr)
     call MPI_bcast(se_prescribed_wind_2d,1 ,MPIlogical_t  ,par%root,par%comm,ierr)
-#ifndef CAM
 
     call MPI_bcast(output_prefix,MAX_STRING_LEN,MPIChar_t  ,par%root,par%comm,ierr)
     call MPI_bcast(output_timeunits ,max_output_streams,MPIinteger_t,par%root,par%comm,ierr)
@@ -753,8 +624,7 @@ module namelist_mod
     call MPI_bcast(num_io_procs , 1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(output_type , 9,MPIChar_t,par%root,par%comm,ierr)
     call MPI_bcast(infilenames ,160*MAX_INFILES ,MPIChar_t,par%root,par%comm,ierr)
-! These options are set by the CAM namelist
-#ifndef CAM
+
 ! Set and broadcast tracer transport type
     if (trim(tracer_transport_method) == 'se_gll') then
       tracer_transport_type = TRACERTRANSPORT_SE_GLL
@@ -764,7 +634,6 @@ module namelist_mod
     end if
     call MPI_bcast(tracer_transport_type,1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(tracer_grid_type,1,MPIinteger_t,par%root,par%comm,ierr)
-#endif
 
 #ifdef IS_ACCELERATOR
     if (nthreads_accel > 0) then
@@ -796,8 +665,6 @@ module namelist_mod
           call abortmp('hypervis_subcycle auto determine only supported for nv==4')
        endif
     endif
-#endif
-
 
     if (mesh_file /= "none" .AND. ne /=0) then
       write (*,*) "namelist_mod: mesh_file:",mesh_file, &
@@ -862,9 +729,6 @@ module namelist_mod
           call abortmp('prescribed_wind should be either 0 or 1')
     endif
 
-#ifdef CAM
-    nmpi_per_node=1
-#endif
     call MPI_bcast(interpolate_analysis, 7,MPIlogical_t,par%root,par%comm,ierr)
     call MPI_bcast(interp_nlat , 1,MPIinteger_t,par%root,par%comm,ierr)
     call MPI_bcast(interp_nlon , 1,MPIinteger_t,par%root,par%comm,ierr)
@@ -918,7 +782,6 @@ module namelist_mod
        write(iulog,*)"readnl: accum         = ",accumfreq,accumstart,accumstop
 
        write(iulog,*)"readnl: topology      = ",TRIM( TOPOLOGY )
-#ifndef CAM
        write(iulog,*)"readnl: test_case     = ",TRIM(test_case)
        write(iulog,*)"readnl: omega         = ",omega
        write(iulog,*)"readnl: sub_case      = ",sub_case
@@ -933,7 +796,6 @@ module namelist_mod
        write(iulog,*)"readnl: NThreads      = ",NTHREADS
        write(iulog,*)"readnl: vert_num_threads = ",vert_num_threads
        write(iulog,*)"readnl: nthreads_accel = ",nthreads_accel
-#endif
 
        write(iulog,*)"readnl: ne,np         = ",NE,np
        if (npdg>0) write(iulog,*)"readnl: npdg       = ",npdg
@@ -956,16 +818,12 @@ module namelist_mod
        write(iulog,*)"readnl: tracer_advection_formulation  = ",tracer_advection_formulation
        write(iulog,*)"readnl: tstep_type    = ",tstep_type
        write(iulog,*)"readnl: vert_remap_q_alg  = ",vert_remap_q_alg
-#ifdef CAM
-       write(iulog,*)"readnl: se_nsplit         = ", NSPLIT
-       write(iulog,*)"readnl: se_ftype          = ",ftype
-       write(iulog,*)"readnl: se_limiter_option = ",limiter_option
-#else
+
        write(iulog,*)"readnl: tstep          = ",tstep
        write(iulog,*)"readnl: ftype          = ",ftype
        write(iulog,*)"readnl: limiter_option = ",limiter_option
        write(iulog,*)"filter: smooth         = ",smooth
-#endif
+
        write(iulog,*)"readnl: qsplit        = ",qsplit
        write(iulog,*)"readnl: vertical remap frequency rsplit (0=disabled): ",rsplit
        write(iulog,*)"readnl: physics       = ",physics
@@ -996,13 +854,6 @@ module namelist_mod
        write(iulog,*)"PHIS smoothing:  ",smooth_phis_numcycle,smooth_phis_nudt
        write(iulog,*)"SGH  smoothing:  ",smooth_sgh_numcycle
 
-#if ( defined CAM )
-       write(iulog,'(a,e14.6)')"nudging:  se_met_nudge_u = ", se_met_nudge_u
-       write(iulog,'(a,e14.6)')"nudging:  se_met_nudge_p = ", se_met_nudge_p
-       write(iulog,'(a,e14.6)')"nudging:  se_met_nudge_t = ", se_met_nudge_t
-       write(iulog,'(a,I4)')   "nudging:  se_met_tevolve = ", se_met_tevolve
-#endif
-
        if(initial_total_mass>0) then
           write(iulog,*) "initial_total_mass = ",initial_total_mass
        end if
@@ -1027,7 +878,6 @@ module namelist_mod
           write(iulog,*)"     filter: amount of clipping  = ",wght_fm
        end if
        endif
-#ifndef CAM
 
        write(iulog,*)"  analysis: output_prefix = ",TRIM(output_prefix)
        write(iulog,*)"  analysis: io_stride = ",io_stride
@@ -1053,13 +903,12 @@ module namelist_mod
              end select
           end if
        end do
-#endif
-#ifndef CAM
+
        select case (tracer_transport_type)
        case (TRACERTRANSPORT_SE_GLL)
          write(iulog, *) 'Eulerian tracer advection on GLL grid'
         end select
-#endif
+
        write(iulog,*)" analysis interpolation = ", interpolate_analysis
        if(any(interpolate_analysis)) then
           write(iulog,*)" analysis interp nlat = ",interp_nlat

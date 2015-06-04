@@ -78,17 +78,13 @@ contains
     integer :: lwork
 
     real(r8) :: wr(N), wi(N), vr(N,N)
-#ifdef CAM
-    call abortmp('not supported in cam at this time')
-#else
+
     lwork = 4*N
     n2 = n
-!    print *,'calling dgeev'
-!    call DSYEV( 'V', 'U', N, Er, N2, lamr, work, lwork, info )
+
     call DGEEV( 'V', 'V', N, Er, N, lamr, wi, El, N, vr, N, work, lwork, info )
-!    print *,'done calling dgeev'
+
     Er = vr
-#endif
   end function reigen_solver
 
 end module linear_algebra_mod

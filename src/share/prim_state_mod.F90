@@ -62,12 +62,10 @@ contains
        time=0.0D0
        c0  =0.0D0
 
-#ifndef CAM
 #ifndef _BGL
        open(unit=10,file=massfname,form="formatted",status="replace")
 !       write(10,*)time,c0
        close(10)
-#endif
 #endif
     end if
 
@@ -156,11 +154,7 @@ contains
     np1=tl%np1
 
     ! forcing timelevel
-#ifdef CAM
-    pnm1 = 1
-#else
     pnm1=tl%nm1  
-#endif
 
     dt=tstep*qsplit
     !

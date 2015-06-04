@@ -81,11 +81,7 @@ contains
     use, intrinsic :: iso_c_binding
 #endif
 
-#ifndef CAM
     use asp_tests, only : asp_advection_vertical
-#else
-    use control_mod, only : prescribed_vertwind
-#endif
 
     implicit none
 

@@ -8,43 +8,11 @@
 module physical_constants
   ! ------------------------------
   use kinds, only : real_kind, longdouble_kind
-#ifdef CAM
-  use physconst, only : pi, & ! _EXTERNAL
-		        g => gravit, &
-                        rearth, &
-                        omega, &
-                        Rgas => rair, &
-                        cpair, &
-                        p0 => pstd, &
-                        MWDAIR => mwdry, &
-                        Rwater_vapor => rh2o, &
-                        Cpwater_vapor => cpwv, &
-                        kappa => cappa, &
-                        Rd_on_Rv => epsilo, &
-                        Cpd_on_Cpv, &
-                        rrearth => ra
-#endif
   ! -----------------------------
-  implicit none
 
+  implicit none
   private
-#ifdef CAM
-  real (kind=real_kind), public, parameter :: DD_PI = pi
-  real (kind=longdouble_kind), public, parameter :: QQ_PI = 3.141592653589793238462643383279_longdouble_kind
-  public                                   :: g              ! m s^-2
-  public                                   :: rearth         ! m
-  public                                   :: omega          ! s^-1
-  public                                   :: Rgas
-  real (kind=real_kind), public, parameter :: Cp           = cpair
-  public                                   :: p0             ! Pa
-  public                                   :: MWDAIR
-  public                                   :: Rwater_vapor
-  public                                   :: Cpwater_vapor
-  public                                   :: kappa
-  public                                   :: Rd_on_Rv
-  public                                   :: Cpd_on_Cpv
-  public                                   :: rrearth         ! m
-#else
+
   real (kind=real_kind), public, parameter :: DD_PI = 3.141592653589793238462643383279_real_kind
   real (kind=longdouble_kind), public, parameter :: QQ_PI = 3.141592653589793238462643383279_longdouble_kind
 
@@ -64,6 +32,5 @@ module physical_constants
   real (kind=real_kind), public, parameter :: Rd_on_Rv     = Rgas/Rwater_vapor	
   real (kind=real_kind), public, parameter :: Cpd_on_Cpv     = Cp/Cpwater_vapor
   real (kind=real_kind), public, parameter :: rrearth      = 1.0_real_kind/rearth         ! m
-#endif
 
 end module physical_constants

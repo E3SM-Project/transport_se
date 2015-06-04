@@ -70,7 +70,6 @@ module element_mod
     real (kind=real_kind) :: FM(np,np,2,nlev, timelevels)             ! momentum forcing
     real (kind=real_kind) :: FT(np,np,nlev, timelevels)               ! temperature forcing
 
-    ! forcing terms for both CAM and HOMME
     ! FQps for conserving dry mass in the presence of precipitation
 
     real (kind=real_kind) :: pecnd(np,np,nlev)                        ! pressure perturbation from condensate

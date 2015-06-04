@@ -20,7 +20,6 @@ module physics_mod
   
   private
   
-#ifndef CAM
   ! Each element contains this kind of physics
   type, public :: elem_physics_t
      !required by multicloud       
@@ -45,7 +44,6 @@ module physics_mod
      real (kind=real_kind) :: rmp(np,np)         ! inverse mass matrix 
      !end multicloud
   end type elem_physics_t
-#endif
   
   public :: Saturation_Vapor_Pressure
   public :: Specific_Humidity

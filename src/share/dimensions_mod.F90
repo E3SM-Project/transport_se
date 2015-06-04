@@ -3,20 +3,16 @@
 #endif
 
 module dimensions_mod
-#ifdef CAM
-  use constituents, only : qsize_d=>pcnst ! _EXTERNAL
-#endif
+
   implicit none
   private
 
 ! set MAX number of tracers.  actual number of tracers is a run time argument  
-#ifdef CAM
-#else
+
 #ifdef QSIZE_D
   integer, parameter         :: qsize_d=QSIZE_D    ! SE tracers  
 #else
   integer, parameter         :: qsize_d=4          ! SE tracers: default is 4
-#endif
 #endif
 
   integer, parameter, public :: nvar = 4 ! FI # dependent variables

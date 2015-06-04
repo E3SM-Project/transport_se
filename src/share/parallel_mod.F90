@@ -46,9 +46,6 @@ module parallel_mod
     logical :: masterproc                 
   end type
 
-#ifdef CAM
-  type (parallel_t)    :: par              ! parallel structure for distributed memory programming
-#endif
   integer, parameter :: nrepro_vars=MAX(10,nlev*qsize_d)
   real(kind=8), public, allocatable :: global_shared_buf(:,:)
   real(kind=8), public :: global_shared_sum(nrepro_vars)
@@ -101,9 +98,7 @@ contains
 ! ================================================
      
   function initmp(npes_in) result(par)
-#ifdef CAM
-    use spmd_utils, only : mpicom
-#endif      
+
     integer, intent(in), optional ::  npes_in
     type (parallel_t) par
 
@@ -123,11 +118,7 @@ contains
 
     integer(kind=int_kind),allocatable                  :: tarray(:)
     integer(kind=int_kind)                              :: namelen,i
-#ifdef CAM
-    integer :: color
-    integer :: iam_cam, npes_cam
-    integer :: npes_homme
-#endif
+
     !================================================
     !     Basic MPI initialization
     ! ================================================
@@ -138,22 +129,10 @@ contains
        call MPI_init(ierr)
     end if
 
-    par%root     = 0
+    par%root      = 0
     par%intercomm = 0
-    
-#ifdef CAM
-    if(present(npes_in)) then
-       npes_homme=npes_in
-    else
-       npes_homme=npes_cam
-    end if
-    call MPI_comm_size(mpicom,npes_cam,ierr)
-    call MPI_comm_rank(mpicom,iam_cam,ierr)
-    color = iam_cam/npes_homme
-    call mpi_comm_split(mpicom, color, iam_cam, par%comm, ierr)
-#else
-    par%comm     = MPI_COMM_WORLD
-#endif
+    par%comm      = MPI_COMM_WORLD
+
     call MPI_comm_rank(par%comm,par%rank,ierr)
     call MPI_comm_size(par%comm,par%nprocs,ierr)
 
@@ -305,17 +284,13 @@ contains
   ! and prints a message
   ! =========================================================
   subroutine abortmp(string)
-#ifdef CAM
-    use cam_abortutils, only : endrun
-#else
+
 #ifdef _MPI
     integer info,ierr
 #endif
-#endif
+
     character*(*) string
-#ifdef CAM
-    call endrun(string)
-#else
+
     write(*,*) iam,' ABORTING WITH ERROR: ',string
 #ifdef _AIX
     call xl__trbk()
@@ -324,7 +299,7 @@ contains
     call MPI_Abort(MPI_COMM_WORLD,info,ierr)
     call MPI_finalize(info)
 #endif
-#endif
+
   end subroutine abortmp
        
   ! =========================================================

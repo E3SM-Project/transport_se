@@ -63,7 +63,6 @@ module Manager
 
 ! In the absence of a clear alternative, I have removed this module
 ! and all uses of it from CAM compilations. -Sean Santos (santos@ucar.edu)
-#ifndef CAM
 
     use physics_mod, only : elem_physics_t
     use control_mod, only : physics
@@ -124,5 +123,4 @@ contains
         endif
     end subroutine ManagerInit
 
-#endif
 end module Manager

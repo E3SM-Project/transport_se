@@ -157,8 +157,6 @@ module control_mod
 !            (\div * tensor * \grad) operator uses cartesian laplace
 !
 
-
-
   ! hyperviscosity parameters used for smoothing topography
   integer, public :: smooth_phis_numcycle = 0   ! 0 = disable
   integer, public :: smooth_sgh_numcycle = 0   ! 0 = disabled
@@ -167,19 +165,11 @@ module control_mod
 
   integer, public :: prescribed_wind=0    ! fix the velocities?
   logical, public :: se_prescribed_wind_2d=.false.
-#ifdef CAM
-  real (kind=real_kind), public :: se_met_nudge_u = 0.D0  ! velocity nudging rate (1/sec)
-  real (kind=real_kind), public :: se_met_nudge_p = 0.D0  ! pressure nudging rate (1/sec)
-  real (kind=real_kind), public :: se_met_nudge_t = 0.D0  ! temperature nudging rate (1/sec)
-  integer,               public :: se_met_tevolve = 0     ! switch to turn on time evolution of nudging within dynamics
-  integer,               public :: prescribed_vertwind = 0
-#endif
 
   real (kind=real_kind), public :: initial_total_mass = 0    ! initial perturbation in JW test case
   real (kind=real_kind), public :: u_perturb   = 0         ! initial perturbation in JW test case
-#ifndef CAM
   real (kind=real_kind), public :: pertlim = 0          !pertibation to temperature [like CESM]
-#endif
+
   integer, public, parameter :: west  = 1
   integer, public, parameter :: east  = 2
   integer, public, parameter :: south = 3

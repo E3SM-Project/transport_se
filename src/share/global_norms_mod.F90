@@ -916,13 +916,10 @@ contains
   end function linf_vnorm
 
   subroutine wrap_repro_sum (nvars, comm, nsize)
+
     use dimensions_mod, only: nelemd
-#ifdef CAM
-    use shr_reprosum_mod, only: repro_sum => shr_reprosum_calc
-#else
-    use repro_sum_mod, only: repro_sum
-#endif
-    use parallel_mod, only: global_shared_buf, global_shared_sum, nrepro_vars, abortmp
+    use repro_sum_mod,  only: repro_sum
+    use parallel_mod,   only: global_shared_buf, global_shared_sum, nrepro_vars, abortmp
 
     implicit none
 

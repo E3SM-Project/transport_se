@@ -9,11 +9,9 @@ module prim_driver_mod
   use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
   use hybrid_mod, only : hybrid_t
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
-#ifndef CAM
   use prim_restart_mod, only : initrestartfile
   use restart_io_mod , only : RestFile,readrestart
   use Manager
-#endif
   use filter_mod, only : filter_t
   use derivative_mod, only : derivative_t
   use reduction_mod, only : reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
@@ -92,14 +90,11 @@ contains
     ! --------------------------------
     use physical_constants, only : dd_pi
     ! --------------------------------
-#ifndef CAM
     use repro_sum_mod, only: repro_sum, repro_sum_defaultopts, &
          repro_sum_setopts
-#else
-    use infnan,           only: nan, assignment(=)
-    use shr_reprosum_mod, only: repro_sum => shr_reprosum_calc
-#endif
+
     implicit none
+
     type (element_t), pointer :: elem(:)
     type (parallel_t), intent(in) :: par
     type (domain1d_t), pointer :: dom_mt(:)
@@ -130,16 +125,13 @@ contains
     real(kind=real_kind) :: approx_elements_per_task
     integer :: n_domains
 
-
-#ifndef CAM
     logical :: repro_sum_use_ddpdd, repro_sum_recompute
     real(kind=real_kind) :: repro_sum_rel_diff_max
-#endif
+
     ! =====================================
     ! Read in model control information
     ! =====================================
-    ! cam readnl is called in spmd_dyn (needed prior to mpi_init)
-#ifndef CAM
+
     call readnl(par)
     if (MeshUseMeshFile) then
        total_nelem = MeshCubeElemCount()
@@ -167,7 +159,7 @@ contains
        repro_sum_master=par%masterproc,                      &
        repro_sum_logunit=6                           )
        if(par%masterproc) print *, "Initialized repro_sum"
-#endif
+
     ! ====================================
     ! Set cube edge rotation type for model
     ! unnecessary complication here: all should
@@ -175,7 +167,6 @@ contains
     ! =====================================
     rot_type="contravariant"
 
-#ifndef CAM
     if (par%masterproc) then
        ! =============================================
        ! Compute total simulated time...
@@ -189,8 +180,6 @@ contains
        call test_gauss(np)
        call test_gausslobatto(np)
     end if
-#endif
-
 
     ! ===============================================================
     ! Allocate and initialize the graph (array of GridVertex_t types)
@@ -280,9 +269,7 @@ contains
        allocate(elem(nelemd))
        call allocate_element_desc(elem)
 
-#ifndef CAM
        call ManagerInit()
-#endif
     endif
 
     ! ====================================================
@@ -421,11 +408,6 @@ contains
        elem(ie)%derived%Omega_p=0
        elem(ie)%state%dp3d=0
 
-#ifdef CAM
-       elem(ie)%derived%u_met = nan
-       elem(ie)%derived%v_met = nan
-       elem(ie)%derived%T_met = nan
-#endif
     enddo
 
 
@@ -433,11 +415,11 @@ contains
     !  This routines initalizes a Restart file.  This involves:
     !      I)  Setting up the MPI datastructures
     ! ==========================================================
-#ifndef CAM
+
     if(restartfreq > 0 .or. runtype>=1)  then
        call initRestartFile(elem(1)%state,par,RestFile)
     endif
-#endif
+
     !DBG  write(iulog,*) 'prim_init: after call to initRestartFile'
 
     deallocate(GridEdge)
@@ -501,9 +483,7 @@ contains
          limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
          hypervis_subcycle_q
     use control_mod, only : tracer_transport_type
-#ifndef CAM
     use control_mod, only : pertlim                     !used for homme temperature perturbations
-#endif
     use prim_si_ref_mod, only:  prim_set_mass
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
@@ -514,12 +494,10 @@ contains
     use global_norms_mod, only : test_global_integral, print_cfl
     use hybvcoord_mod, only : hvcoord_t
     use prim_advection_mod, only: prim_advec_init2, deriv
-#ifdef CAM
-#else
     use baroclinic_inst_mod, only : binst_init_state, jw_baroclinic
     use asp_tests, only : asp_tracer, asp_baroclinic, asp_rossby, asp_mountain, asp_gravity_wave, dcmip2_schar
     use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
-#endif
+
 #if USE_CUDA_FORTRAN
     use cuda_mod, only: cuda_mod_init
 #endif
@@ -648,7 +626,6 @@ contains
        call abortmp('Error: only cube topology supported for primaitve equations')
     endif
 
-#ifndef CAM
     ! =================================
     ! HOMME stand alone initialization
     ! =================================
@@ -779,7 +756,6 @@ contains
     endif
 !$OMP END MASTER
 !$OMP BARRIER
-#endif
 
     ! For new runs, and branch runs, convert state variable to (Qdp)
     ! because initial conditon reads in Q, not Qdp
@@ -828,13 +804,6 @@ contains
        write(iulog,'(a,2f9.2)')    "dt_dyn (viscosity):      ",dt_dyn_vis
        write(iulog,'(a,2f9.2)')    "dt_tracer (viscosity):   ",dt_tracer_vis
 
-
-#ifdef CAM
-       if (phys_tscale/=0) then
-          write(iulog,'(a,2f9.2)') "CAM physics timescale:       ",phys_tscale
-       endif
-       write(iulog,'(a,2f9.2)') "CAM dtime (dt_phys):         ",tstep*nsplit*qsplit*max(rsplit,1)
-#endif
     end if
 
 
