@@ -62,7 +62,6 @@ else
    -DPREQX_USE_PIO=FALSE         \
    -DBUILD_HOMME_SWDGX=FALSE    \
    -DBUILD_HOMME_SWEQX=FALSE    \
-   -DBUILD_HOMME_PRIMDGX=FALSE  \
    $REPO
 
   make -j4 clean

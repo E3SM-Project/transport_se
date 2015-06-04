@@ -408,9 +408,7 @@ module namelist_mod
     initial_total_mass=0
     mesh_file='none'
     ne              = 0
-#ifdef _PRIMDG
-    tracer_advection_formulation  = TRACERADV_UGRADQ
-#endif
+
     disable_diagnostics = .false.
 
 
@@ -512,14 +510,6 @@ module namelist_mod
        if(filter_freq == 0) filter_freq = -1
 #ifndef CAM
 
-#ifdef _PRIMDG
-       write(iulog,*)"reading vert_nl namelist..."
-#if defined(OSF1) || defined(_BGL) || defined(_NAMELIST_FROM_FILE)
-       read(unit=7,nml=vert_nl)
-#else
-       read(*,nml=vert_nl)
-#endif
-#endif
 #ifdef _PRIM
        write(iulog,*)"reading physics namelist..."
        if (test_case(1:5)=="dcmip" .or. &

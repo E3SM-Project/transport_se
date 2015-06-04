@@ -59,10 +59,9 @@ else
    -DQSIZE_D=$QSIZE             \
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
-   -DPREQX_USE_PIO=FALSE         \
+   -DPREQX_USE_PIO=FALSE        \
    -DBUILD_HOMME_SWDGX=FALSE    \
    -DBUILD_HOMME_SWEQX=FALSE    \
-   -DBUILD_HOMME_PRIMDGX=FALSE  \
    $REPO
 
   make -j4 clean

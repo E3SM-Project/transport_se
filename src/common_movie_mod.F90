@@ -12,11 +12,7 @@ module common_movie_mod
   public ::  varrequired, vartype, varnames, varcnt, vardims, &
 	dimnames, maxdims, setvarnames, nextoutputstep
 
-
-
-#ifdef _PRIM
   integer, parameter :: varcnt =  39
-
   integer, parameter :: maxdims =  7
 
   character*(*), parameter :: varnames(varcnt)=(/'ps         ', &
@@ -144,77 +140,7 @@ module common_movie_mod
                                                  'nelem       ',&
                                                  'time        ',&
                                                  'nphys       ',&
-                                                 'nsubelements'/)  
-#else
-#ifdef _PRIMDG  
-  integer, parameter :: varcnt =11
-  integer, parameter :: maxdims=4
-  character*(*),parameter::dimnames(maxdims)=(/'ncolp','nlev ','nelem','time '/)  
-  integer, parameter :: vardims(maxdims,varcnt) =  reshape( (/ 1,4,0,0,  &
-                                                               1,2,4,0,  &
-                                                               1,2,4,0,  &
-                                                               1,2,4,0,  &
-                                                               1,0,0,0,  &
-                                                               1,0,0,0,  &
-                                                               4,0,0,0,	 &
-							       1,2,4,0,	 &
-							       1,2,4,0,	 &
-							       1,2,4,0,	 &
-							       1,2,4,0/),&
-                                                               shape=(/maxdims,varcnt/))
-  character*(*),parameter::varnames(varcnt)=(/'ps   ','geop ','u    ','v    ',&
-                                              'lonp ','latp ','time ',	      &
-					      'T    ','p    ','zeta ','dgs  '/)
-  integer, parameter :: vartype(varcnt)=(/nf_double,nf_double,nf_double,nf_double,&
-                                          nf_double,nf_double,nf_double,&
-					  nf_double,nf_double,nf_double,nf_double/)
-  logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,&
-                                              .true.,.true.,.true.,&
-					      .false.,.false.,.false.,.false./)
-#else
-  integer, parameter :: varcnt = 17
-  integer, parameter :: maxdims=5
-  character*(*),parameter::dimnames(maxdims)=(/'ncol ','nlev ','nelem','time ','nphys'/)  
-  integer, parameter :: vardims(maxdims,varcnt) =  reshape( (/ 1,4,0,0,0,  &  !ps
-                                                               1,2,4,0,0,  &  !geop
-                                                               1,2,4,0,0,  &  !u
-                                                               1,2,4,0,0,  &  !v
-                                                               1,0,0,0,0,  &  !lon
-                                                               1,0,0,0,0,  &  !lat
-                                                               5,0,0,0,0,  &  !phys_lon
-                                                               5,0,0,0,0,  &  !phys_lat
-                                                               5,0,0,0,0,  &  !phys_area
-                                                               4,0,0,0,0,  &  ! time
-                                                               5,2,4,0,0,  &  ! c1
-                                                               5,2,4,0,0,  &  ! c2
-                                                               5,2,4,0,0,  &  ! c3
-                                                               5,2,4,0,0,  &  ! c4
-                                                               1,2,4,0,0,  &  ! zeta
-                                                               1,2,4,0,0,  &  ! div
-                                                               1,0,0,0,0/),&  ! area
-                                                               shape=(/maxdims,varcnt/))
-  character*(*),parameter::varnames(varcnt)=(/'ps       ','geop     ','u        ','v        ',&
-                                              'lon      ','lat      ',&
-                                              'phys_lon ','phys_lat ','phys_area',&
-                                              'time     ','c1       ','c2       ','c3       ','c4       ',&
-                                              'zeta     ','div      ','area     '/)
-  integer, parameter :: vartype(varcnt)=(/nf_double,nf_double,nf_double,nf_double,nf_double,&
-       nf_double,nf_double,nf_double,nf_double,nf_double,nf_double,nf_double,&
-       nf_double, nf_double, nf_double, nf_double, nf_double/)
-  logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,&
-                                              .true.,.true.,.true.,&
-                                              .true.,.true.,.true.,&
-                                              .false.,.false.,.false.,&
-                                              .false.,.false.,.false.,.true./)
-
-#endif
-#endif
-
-
-
-
-  ! end of analysis_nl namelist variables
-
+                                                 'nsubelements'/)
 
 contains
 

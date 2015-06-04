@@ -94,13 +94,8 @@ contains
     len = SIZE(state%v)
     call AddStateField(RestDesc,len,type)
 
-#ifdef _PRIMDG
-    len = SIZE(state%phis)
-    call AddStateField(RestDesc,len,type)
-#else
     len = SIZE(state%ps)
     call AddStateField(RestDesc,len,type)
-#endif
 
     len = SIZE(state%gradps)
     call AddStateField(RestDesc,len,type)

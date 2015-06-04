@@ -8,26 +8,6 @@ module prim_si_ref_mod
   implicit none
   private
 
-  type, public :: ref_state_t
-     real(r8) psr                ! reference surface pressure for linearization
-     real(r8) hypi(plevp)        ! reference pressures at interfaces
-     real(r8) hypm(plev)         ! reference pressures at midpoints
-     real(r8) hypd(plev)         ! reference pressure layer thickness
-
-     real(r8) Tref(plev)         ! reference temperature
-     real(r8) RTref(plev)        ! coefficient for ln(ps) term in velocity equation
-     real(r8) Pvec(plev)         ! diagonal P matrix
-     real(r8) Href(plev,plev)    ! reference hydrostatic matrix (Href)
-     real(r8) Cref(plev,plev)    ! reference hydrostatic matrix (Cmat)
-     real(r8) Tmat(plev,plev)    ! tau matrix (Tmat)
-
-     real(r8) Amat(plev,plev)     ! vertical structure matrix
-     real(r8) Amat_inv(plev,plev) ! inverse vertical structure matrix
-     real(r8) Emat(plev,plev)     ! right eigenvector matrix
-     real(r8) Emat_inv(plev,plev) ! right eigenvector matrix
-     real(r8) Lambda(plev)        ! solver eigenvalues
-  end type ref_state_t
-
   public  :: prim_set_mass
 
 contains
