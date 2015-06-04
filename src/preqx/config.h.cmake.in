@@ -3,9 +3,6 @@
 /* Energy Diagnostics */
 #cmakedefine ENERGY_DIAGNOSTICS
 
-/* Using PRIMITIVE */
-#define _PRIM
-
 /* WK_GRAD */
 #define _WK_GRAD 1
 

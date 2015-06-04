@@ -27,10 +27,8 @@ implicit none
 save
 
 public :: biharmonic_wk
-#ifdef _PRIM
 public :: biharmonic_wk_scalar
 public :: biharmonic_wk_scalar_minmax
-#endif
 
 !
 ! compute vorticity/divergence and then project to make continious
@@ -53,11 +51,8 @@ type (EdgeBuffer_t)          :: edge1
 
 contains
 
-#ifdef _PRIM
 subroutine biharmonic_wk(elem,pstens,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
-#else
-subroutine biharmonic_wk(elem,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
-#endif
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! compute weak biharmonic operator
 !    input:  h,v (stored in elem()%, in lat-lon coordinates
@@ -71,9 +66,7 @@ real (kind=real_kind), dimension(np,np,2,nlev,nets:nete)  :: vtens
 real (kind=real_kind), dimension(np,np,nlev,nets:nete) :: ptens
 type (EdgeBuffer_t)  , intent(inout) :: edge3
 type (derivative_t)  , intent(in) :: deriv
-#ifdef _PRIM
 real (kind=real_kind), dimension(np,np,nets:nete) :: pstens
-#endif
 
 ! local
 integer :: k,kptr,i,j,ie,ic
@@ -111,23 +104,16 @@ logical var_coef1
 
    do ie=nets,nete
       
-#ifdef _PRIM
       ! should filter lnps + PHI_s/RT?
       pstens(:,:,ie)=laplace_sphere_wk(elem(ie)%state%ps_v(:,:,nt),deriv,elem(ie),var_coef=var_coef1)
-#endif
-      
+
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, j, i)
 #endif
       do k=1,nlev
          do j=1,np
             do i=1,np
-#ifdef _PRIM
-               T(i,j,k)=elem(ie)%state%T(i,j,k,nt) 
-#else            
-               ! filter surface height, not thickness
-               T(i,j,k)=elem(ie)%state%p(i,j,k,nt) + elem(ie)%state%ps(i,j)
-#endif
+               T(i,j,k)=elem(ie)%state%T(i,j,k,nt)
             enddo
          enddo
         
@@ -141,10 +127,8 @@ logical var_coef1
       kptr=nlev
       call edgeVpack(edge3, vtens(1,1,1,1,ie),2*nlev,kptr,elem(ie)%desc)
 
-#ifdef _PRIM
       kptr=3*nlev
       call edgeVpack(edge3, pstens(1,1,ie),1,kptr,elem(ie)%desc)
-#endif
    enddo
    
    call bndry_exchangeV(hybrid,edge3)
@@ -174,13 +158,11 @@ logical var_coef1
               nu_ratio=nu_ratio2)
       enddo
          
-#ifdef _PRIM
       kptr=3*nlev
       call edgeVunpack(edge3, pstens(1,1,ie), 1, kptr, elem(ie)%desc)
       ! apply inverse mass matrix, then apply laplace again
       lap_ps(:,:)=rspheremv(:,:)*pstens(:,:,ie)
       pstens(:,:,ie)=laplace_sphere_wk(lap_ps,deriv,elem(ie),var_coef=.true.)
-#endif
 
    enddo
 #ifdef DEBUGOMP
@@ -192,7 +174,6 @@ logical var_coef1
 end subroutine
 
 
-#ifdef _PRIM
 subroutine biharmonic_wk_dp3d(elem,dptens,dpflux,ptens,vtens,deriv,edge3,hybrid,nt,nets,nete)
 use derivative_mod, only :  subcell_Laplace_fluxes
 
@@ -456,13 +437,6 @@ logical var_coef1
 #endif
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end subroutine
-
-#endif
-
-
-
-
-
 
 
 subroutine make_C0(zeta,elem,hybrid,nets,nete)
@@ -768,13 +742,6 @@ call make_C0(zeta,elem,hybrid,nets,nete)
 end subroutine
 
 
-
-
-
-
-
-
-#ifdef _PRIM
 subroutine neighbor_minmax(elem,hybrid,edgeMinMax,nets,nete,min_neigh,max_neigh)
 !
 ! compute Q min&max over the element and all its neighbors
@@ -844,148 +811,5 @@ real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
 #endif
 
 end subroutine
-
-
-#else
-
-
-subroutine neighbor_minmax(elem,hybrid,edgeMinMax,nets,nete,nt,min_neigh,max_neigh,min_var,max_var,kmass)
-!
-! compute Q min&max over the element and all its neighbors
-!
-!
-integer :: nets,nete,nt
-type (hybrid_t)      , intent(in) :: hybrid
-type (element_t)     , intent(inout) :: elem(:)
-type (EdgeBuffer_t)  , intent(in) :: edgeMinMax
-real (kind=real_kind) :: min_neigh(nlev,nets:nete)
-real (kind=real_kind) :: max_neigh(nlev,nets:nete)
-real (kind=real_kind),optional :: min_var(nlev,nets:nete)
-real (kind=real_kind),optional :: max_var(nlev,nets:nete)
-real (kind=real_kind) :: Qmin(np,np,nlev)
-real (kind=real_kind) :: Qmax(np,np,nlev)
-real (kind=real_kind) :: Qvar(np,np,nlev)
-type (EdgeBuffer_t)          :: edgebuf
-integer, optional :: kmass
-
-! local
-integer :: ie,k,q
-
-  if(present(kmass))then
-!the check if kmass is a valid number is done in sweq_mod
-    do k=1,nlev
-      if(k.ne.kmass)then
-         do ie=nets,nete
-            elem(ie)%state%p(:,:,k,nt)=elem(ie)%state%p(:,:,k,nt)/&
-            elem(ie)%state%p(:,:,kmass,nt)
-         enddo
-      endif
-    enddo
-  endif
-
-
-
-    ! create edge buffer for 3 fields
-    call initEdgeBuffer(hybrid%par,edgebuf,3*nlev)
-
-
-    ! compute p min, max
-    do ie=nets,nete
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-       do k=1,nlev
-          Qmin(:,:,k)=minval(elem(ie)%state%p(:,:,k,nt))
-          Qmax(:,:,k)=maxval(elem(ie)%state%p(:,:,k,nt))
-          ! max - min - crude approximation to TV within the element:
-          Qvar(:,:,k)=Qmax(1,1,k)-Qmin(1,1,k)
-       enddo
-       call edgeVpack(edgebuf,Qmax,nlev,0,elem(ie)%desc)
-       call edgeVpack(edgebuf,Qmin,nlev,nlev,elem(ie)%desc)
-       call edgeVpack(edgebuf,Qvar,nlev,2*nlev,elem(ie)%desc)
-    enddo
-    
-    call bndry_exchangeV(hybrid,edgebuf)
-       
-    do ie=nets,nete
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-       do k=1,nlev
-          Qmin(:,:,k)=minval(elem(ie)%state%p(:,:,k,nt))
-          Qmax(:,:,k)=maxval(elem(ie)%state%p(:,:,k,nt))
-       enddo
-
-       ! now unpack the min
-       if (present(min_var)) then
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-          do k=1,nlev
-             Qvar(:,:,k)=Qmax(1,1,k)-Qmin(1,1,k)
-          enddo
-! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-          call edgeVunpackMin(edgebuf,Qvar,nlev,2*nlev,elem(ie)%desc)
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-          do k=1,nlev
-             min_var(k,ie)=minval(Qvar(:,:,k))
-          enddo
-       endif
-
-       ! now unpack the max
-       if (present(max_var)) then
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-          do k=1,nlev
-             Qvar(:,:,k)=Qmax(1,1,k)-Qmin(1,1,k)
-          enddo
-! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-          call edgeVunpackMax(edgebuf,Qvar,nlev,2*nlev,elem(ie)%desc)
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-          do k=1,nlev
-             max_var(k,ie)=maxval(Qvar(:,:,k))
-          enddo
-       endif
-
-
-! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-       call edgeVunpackMax(edgebuf,Qmax,nlev,0,elem(ie)%desc)
-       call edgeVunpackMin(edgebuf,Qmin,nlev,nlev,elem(ie)%desc)
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
-#endif
-       do k=1,nlev
-          max_neigh(k,ie)=maxval(Qmax(:,:,k))
-          min_neigh(k,ie)=minval(Qmin(:,:,k))
-       enddo
-       
-    end do
-
-    call FreeEdgeBuffer(edgebuf) 
-#ifdef DEBUGOMP
-#if (defined HORIZ_OPENMP)
-!$OMP BARRIER
-#endif
-#endif
-
-  if(present(kmass))then
-    do k=1,nlev
-       if(k.ne.kmass)then
-          do ie=nets,nete
-             elem(ie)%state%p(:,:,k,nt)=elem(ie)%state%p(:,:,k,nt)*&
-             elem(ie)%state%p(:,:,kmass,nt)
-          enddo
-       endif
-    enddo
-  endif
-end subroutine
-#endif
-
-
 
 end module

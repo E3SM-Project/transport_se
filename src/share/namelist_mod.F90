@@ -478,7 +478,6 @@ module namelist_mod
        if(filter_freq == 0) filter_freq = -1
 #ifndef CAM
 
-#ifdef _PRIM
        write(iulog,*)"reading physics namelist..."
        if (test_case(1:5)=="dcmip" .or. &
            test_case(1:10)=="baroclinic" .or. &
@@ -503,7 +502,6 @@ module namelist_mod
          write(iulog,*)"reading aquaplanet namelist..."
 
        end if
-#endif
 #endif
 !      Default interpolation grid  (0 = auto compute based on ne,nv)  interpolation is off by default
 #ifdef PIO_INTERP
@@ -834,7 +832,6 @@ module namelist_mod
 
     ftype = se_ftype
 
-#ifdef _PRIM
     rk_stage_user=3  ! 3d PRIM code only supports 3 stage RK tracer advection
     ! CHECK timestepping options
      if (tstep_type == 0) then
@@ -860,7 +857,6 @@ module namelist_mod
           call abortmp('limiter 8,84 requires hypervis_subcycle_q=1')
        endif
     endif
-#endif
 
     if((prescribed_wind/=0).and.(prescribed_wind/=1))then
           call abortmp('prescribed_wind should be either 0 or 1')

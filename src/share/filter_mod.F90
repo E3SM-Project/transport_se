@@ -30,10 +30,10 @@ module filter_mod
 
   private :: bvsigma
   private :: filter_matrix_create
-#ifdef _PRIM
+
   public :: preq_filter
   public :: prim_filter
-#endif
+
 contains
   ! ==================================
   ! taylor_filter_create:
@@ -678,7 +678,6 @@ contains
     end do
   end function gaujordf
 
-#ifdef _PRIM
   subroutine preq_filter(elem, edge3p1, flt, hybrid, nfilt, nets, nete)
     use element_mod, only : element_t
     use edge_mod, only  : Edgebuffer_t, edgevpack, edgevunpack
@@ -1102,5 +1101,4 @@ contains
 
   end subroutine prim_filter
 
-#endif
 end module filter_mod

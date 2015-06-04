@@ -19,15 +19,9 @@ module dimensions_mod
 #endif
 #endif
 
-#ifdef _PRIM
-  integer, parameter, public :: nvar = 4 ! FI # dependent variables 
-#else
-  integer, parameter, public :: nvar = 3 ! FI # dependent variables 
-#endif
-
- 
-  integer, parameter, public :: np = NP
-  integer, parameter, public :: nc  = NC
+  integer, parameter, public :: nvar = 4 ! FI # dependent variables
+  integer, parameter, public :: np   = NP
+  integer, parameter, public :: nc   = NC
 
   integer         :: qsize = 0
 

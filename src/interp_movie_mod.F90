@@ -43,7 +43,6 @@ module interp_movie_mod
 
   implicit none
 #undef V_IS_LATLON
-#if defined(_PRIM)
 #define V_IS_LATLON
   integer, parameter :: varcnt = 42
   integer, parameter :: maxdims =  5
@@ -164,47 +163,7 @@ module interp_movie_mod
        shape=(/maxdims,varcnt/))
 
   character*(*),parameter::dimnames(maxdims)=(/'lon ','lat ','lev ','ilev','time'/)  
-#else
-  integer, parameter :: varcnt = 18
-  integer, parameter :: maxdims=4
-  character*(*),parameter::dimnames(maxdims)=(/'lon ','lat ','lev ','time'/)  
-  integer, parameter :: vardims(maxdims,varcnt) =  reshape( (/ 1,2,4,0,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,0,0,0,  &
-                                                               2,0,0,0,  &
-                                                               2,0,0,0,  &
-                                                               4,0,0,0, &
-                                                               1,2,0,0, &
-                                                               1,2,0,0, &
-                                                               1,2,0,0, &
-                                                               1,2,4,0, &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4,  &
-                                                               1,2,3,4/),&
-                                                               shape=(/maxdims,varcnt/))
-  character*(*),parameter::varnames(varcnt)=(/'ps      ','geop    ','u       ', &
-                                              'v       ','zeta    ','lon     ', &
-                                              'lat     ','gw      ','time    ', &
-                                              'hypervis','max_dx  ','min_dx  ', &
-                                              'psC     ','C1      ','C2      ', &
-                                              'C3      ','C4      ',            &
-                                              'div     '/)
-  integer, parameter :: vartype(varcnt)=(/PIO_double,PIO_double,PIO_double,PIO_double, &
-                                          PIO_double,PIO_double,PIO_double,PIO_double, &
-                                          PIO_double,PIO_double,PIO_double,PIO_double, &
-                                          PIO_double, PIO_double,PIO_double,PIO_double, &
-                                          PIO_double, PIO_double/)
-  logical, parameter :: varrequired(varcnt)=(/.false.,.false.,.false.,.false.,&
-                                              .false.,.true.,.true.,.true.,.true.,&
-                                              .false.,.false.,.false.,.false., &
-                                              .false.,.false.,.false.,.false.,.false./)
 
-#endif
   type(interpolate_t) :: interp
   type(interpdata_t), allocatable :: interpdata(:)
 
@@ -214,26 +173,21 @@ module interp_movie_mod
 
 contains
   subroutine interp_movie_init(elem,hybrid,nets,nete,hvcoord,tl)
-    use time_mod, only : timelevel_t
-    use hybrid_mod, only : hybrid_t
-    use element_mod, only: element_t
-    use pio, only : pio_setdebuglevel, PIO_Put_att, pio_put_var, pio_global ! _EXTERNAL
-    use parallel_mod, only : parallel_t, haltmp, syncmp
-    use interpolate_mod, only : get_interp_lat, get_interp_lon, get_interp_gweight
-#if defined(_PRIM)
-	use hybvcoord_mod, only : hvcoord_t
-#endif
+
+    use time_mod,        only: timelevel_t
+    use hybrid_mod,      only: hybrid_t
+    use element_mod,     only: element_t
+    use pio,             only: pio_setdebuglevel, PIO_Put_att, pio_put_var, pio_global ! _EXTERNAL
+    use parallel_mod,    only: parallel_t, haltmp, syncmp
+    use interpolate_mod, only: get_interp_lat, get_interp_lon, get_interp_gweight
+    use hybvcoord_mod,   only: hvcoord_t
 
     type (TimeLevel_t), intent(in)         :: tl     ! time level struct
     type(element_t) :: elem(:)
     
     type(hybrid_t), target  :: hybrid
-#if defined(_PRIM)
     type(hvcoord_t), intent(in), optional :: hvcoord
-#else
-    ! ignored
-    integer, optional :: hvcoord
-#endif
+
     integer, intent(in) :: nets, nete
     integer :: dimsize(maxdims)   
     integer, pointer :: ldof2d(:),ldof3d(:), iodof2d(:), iodof3d(:)
@@ -271,11 +225,9 @@ contains
     call PIO_setDebugLevel(0)
     call nf_output_init_begin(ncdf,par%masterproc,par%nprocs,par%rank, &
          par%comm,hname,runtype)
-#if defined(_PRIM)
+
     dimsize=(/nlon,nlat,nlev,nlev+1,0/)
-#else
-    dimsize=(/nlon,nlat,nlev,0/)
-#endif
+
     call nf_output_register_dims(ncdf, maxdims, dimnames, dimsize)
 
     iorank=piofs%io_rank
@@ -323,7 +275,6 @@ contains
     call nf_variable_attributes(ncdf, 'u', 'longitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'v', 'latitudinal wind component','meters/second')
     call nf_variable_attributes(ncdf, 'zeta', 'Relative vorticity','1/s')
-#if defined(_PRIM)
     call nf_variable_attributes(ncdf, 'geo', 'Geopotential','m^2/s^2')
     call nf_variable_attributes(ncdf, 'geos', 'Surface geopotential','m^2/s^2')
     call nf_variable_attributes(ncdf, 'T', 'Temperature','degrees kelvin')
@@ -339,7 +290,6 @@ contains
     call nf_variable_attributes(ncdf, 'hybm','hybrid B coefficiet at layer midpoints' ,'dimensionless') 
     call nf_variable_attributes(ncdf, 'hyai','hybrid A coefficiet at layer interfaces' ,'dimensionless') 
     call nf_variable_attributes(ncdf, 'hybi','hybrid B coefficiet at layer interfaces' ,'dimensionless') 
-#endif
     call nf_variable_attributes(ncdf, 'gw', 'gauss weights','dimensionless')
     call nf_variable_attributes(ncdf, 'lat', 'column latitude','degrees_north')
     call nf_variable_attributes(ncdf, 'lon', 'column longitude','degrees_east')
@@ -376,7 +326,6 @@ contains
         ierr = pio_put_var(ncdf(ios)%FileID,varid, gw)
 
 
-#if defined(_PRIM)
           if (present(hvcoord)) then
              vindex = get_varindex('lev',ncdf(ios)%varlist)
              varid = ncdf(ios)%varlist(vindex)%vardesc%varid
@@ -402,8 +351,8 @@ contains
              varid = ncdf(ios)%varlist(vindex)%vardesc%varid
              ierr = pio_put_var(ncdf(ios)%FileID,varid, hvcoord%hybi)
           end if
-#endif
-       endif
+
+      endif
     end do
     deallocate(lat,lon,gw)
     deallocate(lev,ilev)
@@ -424,9 +373,7 @@ contains
     use element_mod, only : element_t
     use time_mod, only : Timelevel_t, tstep, ndays, time_at, secpday, nendstep,nmax
     use parallel_mod, only : parallel_t, abortmp
-#if defined(_PRIM) 
     use hybvcoord_mod, only :  hvcoord_t
-#endif
     use physical_constants, only : omega, g, rrearth, dd_pi, kappa, p0
     use derivative_mod, only : derivinit, derivative_t, vorticity, laplace_sphere_wk
     use hybrid_mod, only : hybrid_t
@@ -441,12 +388,9 @@ contains
     type (element_t),target    :: elem(:)
 
     type (TimeLevel_t)  :: tl
-    type (parallel_t)     :: par
-#if defined(_PRIM)
+    type (parallel_t)   :: par
     type (hvcoord_t)    :: hvcoord
-#else
-    integer,optional    :: hvcoord
-#endif
+
     real (kind=real_kind), intent(in) :: phimean
 
     type (hybrid_t)      , intent(in) :: hybrid
@@ -509,18 +453,17 @@ contains
 
                 do ie=nets,nete
                    en=st+interpdata(ie)%n_interp-1
-#ifdef _PRIM
+
                    call interpolate_scalar(interpdata(ie),elem(ie)%state%ps_v(:,:,n0), &
                         np, datall(st:en,1))
-#endif
+
                    st=st+interpdata(ie)%n_interp
                 enddo
 	        
-#ifdef _PRIM
                 if (p0 < 2000)  then  ! convert to Pa, if using mb
                    datall(:,1) = 100*(datall(:,1)) 
                 endif
-#endif
+
                 call nf_put_var(ncdf(ios),datall(:,1),start2d,count2d,name='ps')
                 deallocate(datall)
              endif
@@ -615,24 +558,9 @@ contains
                 do ie=nets,nete
                    en=st+interpdata(ie)%n_interp-1
                    do k=1,nlev
-#ifdef _PRIM
-                      var3d(:,:,k,1) = 0  ! need to compute PHI from hydrostatic relation
-#else
-                      if(test_case.eq.'vortex') then
-                         var3d(:,:,k,1) = elem(ie)%state%p(:,:,k,n0)
-                      elseif(test_case.eq.'swirl') then
-                         var3d(:,:,k,1) = elem(ie)%state%p(:,:,k,n0)
-                      else
-                         var3d(:,:,k,1) = (elem(ie)%state%p(:,:,k,n0) + elem(ie)%state%ps(:,:) + phimean)/g
-                      end if
-                      if (kmass.ne.-1) then
-                         ! p(:,:,kmass) = is the density, 
-                         ! other levels are tracers.  Output concentration:
-                         if(k.ne.kmass) &
-                              var3d(:,:,k,1)=var3d(:,:,k,1)/elem(ie)%state%p(:,:,kmass,n0)
-                      endif
 
-#endif
+                      var3d(:,:,k,1) = 0  ! need to compute PHI from hydrostatic relation
+
                       call interpolate_scalar(interpdata(ie), var3d(:,:,k,1), &
                            np, datall(st:en,k))
                    end do
@@ -653,11 +581,7 @@ contains
                 do ie=nets,nete
                    do k=1,nlev
                       var3d(:,:,k,ie) = 0
-#ifdef _PRIM
                       var3d(:,:,k,ie) = elem(ie)%state%ps_v(:,:,n0)
-#else
-                      var3d(:,:,k,ie) = elem(ie)%state%p(:,:,k,n0)
-#endif
                       var3d(:,:,k,ie)=laplace_sphere_wk(var3d(:,:,k,ie),&
                            deriv,elem(ie),var_coef=.true.)
                       ! laplace_sphere_wk returns weak form with mass matrix
@@ -748,10 +672,6 @@ contains
              ! End dx outputs
 
 
-#if defined(_PRIM) 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!            large block of _PRIM only I/O
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
              if(nf_selectedvar('geos', output_varnames)) then
                 if (nf_get_frame(ncdf(ios))==1) then
                 st=1
@@ -989,13 +909,6 @@ contains
              !
              ! However, these two routines are still conditionally compiled for either PIO or PIO_INTERP
              ! and hence must be protected by an #ifdef:
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!            end _PRIM only I/O
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-#endif
-
-
 
 
              if(piofs%io_rank==0) then

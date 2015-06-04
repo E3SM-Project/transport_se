@@ -56,7 +56,6 @@ IF (${HOMME_QUAD_PREC})
 ENDIF ()
 
 # Some options for conditional builds
-OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" ON)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
 
 SET(HOMME_USE_CXX FALSE)
