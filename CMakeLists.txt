@@ -58,17 +58,9 @@ ENDIF ()
 # Some options for conditional builds
 OPTION(BUILD_HOMME_SWEQX "Shallow water equations FEM" ON)
 OPTION(BUILD_HOMME_PREQX "Primitive equations FEM" ON)
-OPTION(BUILD_HOMME_SWIM  "Shallow water equations implicit" OFF)
-OPTION(BUILD_HOMME_PRIM  "Primitive equations implicit" OFF)
 
-# swim and prim executables require C++ compiler
-IF(${BUILD_HOMME_SWIM} OR ${BUILD_HOMME_PRIM})
-  SET (HOMME_USE_CXX TRUE)
-  SET (HOMME_USE_TRILINOS TRUE)
-ELSE ()
-  SET(HOMME_USE_CXX FALSE)
-  SET(HOMME_USE_TRILINOS FALSE)
-ENDIF ()
+SET(HOMME_USE_CXX FALSE)
+SET(HOMME_USE_TRILINOS FALSE)
 
 IF (${HOMME_USE_CXX})
   MESSAGE(STATUS "This configuration of HOMME requires a C++ compiler")

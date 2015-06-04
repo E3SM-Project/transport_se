@@ -71,11 +71,8 @@ module restart_io_mod
 
    type, public :: RestartBuffer_t
       type (elem_state_t)        :: buffer
-#ifdef _PRIMXXX
-      type (physics_state_t)     :: puffer
-#endif
-   end type
 
+   end type
 
    type, public :: StateDesc_t
       integer(kind=int_kind)         :: numComponents
