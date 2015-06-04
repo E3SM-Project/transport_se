@@ -32,9 +32,7 @@ module prim_state_mod
   ! ------------------------------
   use reduction_mod, only : parallelmax,parallelmin
   ! ------------------------------
-#ifdef _REFSOLN
-  use ref_state_mod, only : ref_state_read, ref_state_write
-#endif
+
 
 implicit none
 private

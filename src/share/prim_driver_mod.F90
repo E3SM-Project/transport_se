@@ -11,7 +11,6 @@ module prim_driver_mod
   use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
   use prim_restart_mod, only : initrestartfile
   use restart_io_mod , only : RestFile,readrestart
-  use Manager
   use filter_mod, only : filter_t
   use derivative_mod, only : derivative_t
   use reduction_mod, only : reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
@@ -268,8 +267,6 @@ contains
     if (nelemd>0) then
        allocate(elem(nelemd))
        call allocate_element_desc(elem)
-
-       call ManagerInit()
     endif
 
     ! ====================================================
