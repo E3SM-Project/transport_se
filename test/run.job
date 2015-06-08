@@ -23,7 +23,7 @@ set wdir = ~/repos/transport_se/wdir   # directory for building and running
 set MACH = $HOMME/cmake/machineFiles/mira.cmake # machine specific CMAKE settings:
 
 set NCPU = 2                         # number of CPUS to use
-set NTHREADS = 1                     # number of openMP threads
+set NTHREADS = 32                     # number of openMP threads
 
 # set resolution
 set nlev = 64     # number of vertical layers (dont change)
@@ -123,7 +123,7 @@ sed s/NU1/$nu/   > $wdir/input.nl
 cd $wdir
 setenv OMP_NUM_THREADS $NTHREADS
 date
-qsub -n $NCPU -t 10 -i input.nl $exe
+qsub -n 1 --mode c2 -t 10 -i input.nl $exe
 date
 
 exit
