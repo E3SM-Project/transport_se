@@ -1816,24 +1816,20 @@ endif
 
     real(kind=real_kind) :: ds(np,np,2)
 
-    integer i
-    integer j
-    integer l
-
-    real(kind=real_kind) ::  dsdx00
-    real(kind=real_kind) ::  dsdy00
-    real(kind=real_kind) ::  v1(np,np),v2(np,np)
+    integer i, j, l
+    real(kind=real_kind) ::  dsdx00, dsdy00
+    real(kind=real_kind) ::  v1(np,np), v2(np,np)
 
     do j=1,np
        do l=1,np
           dsdx00=0.0d0
           dsdy00=0.0d0
           do i=1,np
-             dsdx00 = dsdx00 + deriv%Dvv(i,l  )*s(i,j  )
-             dsdy00 = dsdy00 + deriv%Dvv(i,l  )*s(j  ,i)
+             dsdx00 = dsdx00 + deriv%Dvv(i,l)*s(i,j)
+             dsdy00 = dsdy00 + deriv%Dvv(i,l)*s(j,i)
           end do
-          v1(l  ,j  ) = dsdx00*rrearth
-          v2(j  ,l  ) = dsdy00*rrearth
+          v1(l, j) = dsdx00*rrearth
+          v2(j, l) = dsdy00*rrearth
        end do
     end do
     ! convert covarient to latlon
@@ -1844,7 +1840,7 @@ endif
        enddo
     enddo
 
-    end function gradient_sphere
+  end function gradient_sphere
 
 
   function curl_sphere_wk_testcov(s,deriv,elem) result(ds)
