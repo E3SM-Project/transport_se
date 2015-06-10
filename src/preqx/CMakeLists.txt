@@ -46,8 +46,7 @@ SET(PREQX_SRCS_F90
   ${SRC_DIR}/pio_io_mod.F90 
   ${SRC_DIR}/repro_sum_mod.F90 
   ${SRC_SHARE_DIR}/time_mod.F90
-  ${SRC_SHARE_DIR}/physics_mod.F90
-  ${SRC_SHARE_DIR}/hybvcoord_mod.F90 
+  ${SRC_SHARE_DIR}/hybvcoord_mod.F90
   ${SRC_DIR}/interp_movie_mod.F90 
   ${UTILS_SHARE_DIR}/shr_kind_mod.F90 
   ${UTILS_SHARE_DIR}/shr_mpi_mod.F90 
@@ -67,11 +66,9 @@ SET(PREQX_SRCS_F90
   ${SRC_DIR}/checksum_mod.F90 
   ${SRC_DIR}/baroclinic_inst_mod.F90 
   ${SRC_SHARE_DIR}/diffusion_mod.F90 
-  ${SRC_SHARE_DIR}/prim_si_mod.F90 
   ${SRC_DIR}/asp_tests.F90 
   ${SRC_SHARE_DIR}/prim_state_mod.F90 
   ${SRC_DIR}/prim_restart_mod.F90 
-  ${SRC_SHARE_DIR}/prim_si_ref_mod.F90 
   ${SRC_SHARE_DIR}/prim_advance_mod.F90
   ${SRC_SHARE_DIR}/prim_advection_mod.F90
   ${SRC_SHARE_DIR}/metis_mod.F90

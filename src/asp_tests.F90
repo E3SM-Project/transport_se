@@ -1018,7 +1018,6 @@ subroutine dcmip2_schar(elem,hybrid,hvcoord,nets,nete)
 ! Code from Jablonowski and Lauritzen
 ! 
 !=======================================================================================================!
-    use prim_si_mod, only : preq_hydrostatic
 
     type(element_t), intent(inout) :: elem(:)
 
@@ -1227,7 +1226,6 @@ subroutine asp_baroclinic(elem,hybrid,hvcoord,nets,nete)
 ! Code from Jablonowski and Lauritzen
 ! 
 !=======================================================================================================!
-    use prim_si_mod, only : preq_hydrostatic
 
     type(element_t), intent(inout) :: elem(:)
     type (hvcoord_t)                  :: hvcoord
@@ -1452,7 +1450,6 @@ end subroutine
 subroutine asp_tracer(elem,hybrid,hvcoord,nets,nete)
     use dimensions_mod, only : np,nlev
     use cube_mod, only : rotate_grid
-    use prim_si_mod, only : preq_hydrostatic
     use testcases_3_4_5_6, only : advection,g ! _EXTERNAL
 
     type(element_t), intent(inout) :: elem(:)
@@ -1543,7 +1540,6 @@ end subroutine
 
 subroutine asp_rossby(elem,hybrid,hvcoord,nets,nete)
     use dimensions_mod, only : np,nlev
-    use prim_si_mod, only : preq_hydrostatic
     use testcases_3_4_5_6, only : rossby_haurwitz ! _EXTERNAL
 
     type(element_t), intent(inout) :: elem(:)
@@ -1611,7 +1607,6 @@ end subroutine
 
 subroutine asp_mountain(elem,hybrid,hvcoord,nets,nete)
     use dimensions_mod, only : np,nlev
-    use prim_si_mod, only : preq_hydrostatic
     use testcases_3_4_5_6, only : mountain_rossby ! _EXTERNAL
 
     type(element_t), intent(inout) :: elem(:)
@@ -1659,7 +1654,6 @@ end subroutine
 subroutine asp_gravity_wave(elem,hybrid,hvcoord,nets,nete,choice)
     use dimensions_mod, only : np,nlev
     use cube_mod, only : rotate_grid
-    use prim_si_mod, only : preq_hydrostatic
     use testcases_3_4_5_6, only : gravity_wave ! _EXTERNAL
 
     type(element_t), intent(inout) :: elem(:)
@@ -1707,6 +1701,60 @@ subroutine asp_gravity_wave(elem,hybrid,hvcoord,nets,nete,choice)
 
 end subroutine
 
+
+
+
+
+subroutine preq_hydrostatic(phi,phis,T_v,p,dp)
+
+    !
+    !  CCM3 hydrostatic integral
+    !
+
+    use kinds, only : real_kind
+    use dimensions_mod, only : np, nlev
+    use physical_constants, only : rgas
+    implicit none
+
+    real(kind=real_kind), intent(out) :: phi(np,np,nlev)
+    real(kind=real_kind), intent(in) :: phis(np,np)
+    real(kind=real_kind), intent(in) :: T_v(np,np,nlev)
+    real(kind=real_kind), intent(in) :: p(np,np,nlev)   
+    real(kind=real_kind), intent(in) :: dp(np,np,nlev)  
+
+    integer i,j,k                         ! longitude, level indices
+    real(kind=real_kind) Hkk,Hkl          ! diagonal term of energy conversion matrix
+    real(kind=real_kind), dimension(np,np,nlev) :: phii       ! Geopotential at interfaces
+
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,j,i,hkk,hkl)
+#endif
+       do j=1,np
+
+          do i=1,np
+             hkk = dp(i,j,nlev)*0.5d0/p(i,j,nlev)
+             hkl = 2*hkk
+             phii(i,j,nlev)  = Rgas*T_v(i,j,nlev)*hkl
+             phi(i,j,nlev) = phis(i,j) + Rgas*T_v(i,j,nlev)*hkk 
+          end do
+
+          do k=nlev-1,2,-1
+             do i=1,np
+                hkk = dp(i,j,k)*0.5d0/p(i,j,k)
+                hkl = 2*hkk
+                phii(i,j,k) = phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkl
+                phi(i,j,k) = phis(i,j) + phii(i,j,k+1) + Rgas*T_v(i,j,k)*hkk
+             end do
+          end do
+
+          do i=1,np
+             hkk = 0.5d0*dp(i,j,1)/p(i,j,1)
+             phi(i,j,1) = phis(i,j) + phii(i,j,2) + Rgas*T_v(i,j,1)*hkk
+          end do
+
+       end do
+
+end subroutine preq_hydrostatic
 
 
 

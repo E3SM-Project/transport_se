@@ -399,12 +399,11 @@ contains
     use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, &
                                     vfile_int, filter_freq, filter_freq_advection, &
                                     transfer_type, vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, &
-                                    s_bv, topology, moisture, rsplit, qsplit, rk_stage_user,&
+                                    s_bv, topology, rsplit, qsplit, rk_stage_user,&
                                     sub_case, hypervis_subcycle_q, &
                                     limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle
     use control_mod,          only: tracer_transport_type
     use control_mod,          only: pertlim                     !used for homme temperature perturbations
-    use prim_si_ref_mod,      only: prim_set_mass
     use thread_mod,           only: nthreads
     use derivative_mod,       only: derivinit, v2pinit
     use global_norms_mod,     only: test_global_integral, print_cfl
@@ -538,7 +537,7 @@ contains
        call ReadRestart(elem,hybrid%ithr,nets,nete,tl)
 
        ! scale PS to achieve prescribed dry mass
-       if (runtype /= 1) call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
+       !if (runtype /= 1) call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
 
        if (runtype==2) then
           ! copy prognostic variables:  tl%n0 into tl%nm1
@@ -630,7 +629,7 @@ contains
 
        ! scale surface pressure to achieve prescribed dry mass
 
-       call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
+       !call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
 
        do ie=nets,nete
 

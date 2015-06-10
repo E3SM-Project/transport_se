@@ -400,7 +400,7 @@ module prim_advection_mod
   use time_mod, only           : TimeLevel_t, smooth, TimeLevel_Qdp
   use diffusion_mod, only      : scalar_diffusion, diffusion_init
   use control_mod, only        : integration, test_case, filter_freq_advection,  hypervis_order, &
-        statefreq, moisture, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &
+        statefreq, TRACERADV_TOTAL_DIVERGENCE, TRACERADV_UGRADQ, &
         nu_q, limiter_option, hypervis_subcycle_q
   use edge_mod, only           : EdgeBuffer_t, edgevpack, edgerotate, edgevunpack, initedgebuffer, &
        edgevunpackmin

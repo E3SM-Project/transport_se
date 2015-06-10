@@ -19,7 +19,7 @@ module prim_state_mod
   ! ------------------------------
   use time_mod, only : tstep, secpday, timelevel_t, TimeLevel_Qdp, time_at
   ! ------------------------------
-  use control_mod, only : integration, test_case, runtype, moisture, &
+  use control_mod, only : integration, test_case, runtype, &
        tstep_type,energy_fixer, qsplit, ftype, use_cpstar, rsplit
   ! ------------------------------
   use hybvcoord_mod, only : hvcoord_t 
@@ -425,7 +425,6 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
     use hybvcoord_mod, only : hvcoord_t
     use element_mod, only : element_t
     use physical_constants, only : Cp, cpwater_vapor
-    use physics_mod, only : Virtual_Specific_Heat, Virtual_Temperature
 
     integer :: t1,t2,n,nets,nete
     type (element_t)     , intent(inout), target :: elem(:)
@@ -496,8 +495,8 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
                 ! Cp_star = cp + (Cpwater_vapor - cp)*qval
                 qval_t1 = elem(ie)%state%Qdp(i,j,k,1,t1_qdp)/dpt1(i,j,k)
                 qval_t2 = elem(ie)%state%Qdp(i,j,k,1,t2_qdp)/dpt2(i,j,k)
-                cp_star1= Virtual_Specific_Heat(qval_t1)
-                cp_star2= Virtual_Specific_Heat(qval_t2)
+                !cp_star1= Virtual_Specific_Heat(qval_t1)
+                !cp_star2= Virtual_Specific_Heat(qval_t2)
              else
                 cp_star1=cp
                 cp_star2=cp
@@ -561,24 +560,6 @@ subroutine prim_energy_halftimes(elem,hvcoord,tl,n,t_before_advance,nets,nete)
           endif
        enddo
        elem(ie)%accum%PEner(:,:,n)=suml(:,:)
-
-
-
-!      compute alternate PE term which matches what is used in CAM physics
-       wet =(moisture /= "dry")
-       do k=1,nlev
-          p(:,:,k)   = hvcoord%hyam(k)*hvcoord%ps0 + hvcoord%hybm(k)*elem(ie)%state%ps_v(:,:,t2)
-          do j=1,np
-             do i=1,np
-                if (wet) then
-                   Qt = elem(ie)%state%Qdp(i,j,k,1,t2_qdp)/dpt2(i,j,k)
-                   T_v(i,j,k) = Virtual_Temperature(elem(ie)%state%T(i,j,k,t2),Qt)
-                else
-                   T_v(i,j,k) = elem(ie)%state%T(i,j,k,t2)
-                endif
-             end do
-          end do
-       end do
 
     enddo
     
