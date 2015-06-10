@@ -5,100 +5,69 @@
 !#define _DBG_ print *,"file: ",__FILE__," line: ",__LINE__," ithr: ",hybrid%ithr
 #define _DBG_
 module prim_driver_mod
-  use kinds, only : real_kind, iulog, longdouble_kind
-  use dimensions_mod, only : np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
-  use hybrid_mod, only : hybrid_t
-  use quadrature_mod, only : quadrature_t, test_gauss, test_gausslobatto, gausslobatto
-  use prim_restart_mod, only : initrestartfile
-  use restart_io_mod , only : RestFile,readrestart
-  use filter_mod, only : filter_t
-  use derivative_mod, only : derivative_t
-  use reduction_mod, only : reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
-         red_sum, red_sum_int, red_flops, initreductionbuffer
 
-  use element_mod, only : element_t, timelevels,  allocate_element_desc
-  use thread_mod, only : omp_get_num_threads
+  use kinds,            only: real_kind, iulog
+  use dimensions_mod,   only: np, nlev, nlevp, nelem, nelemd, nelemdmax, GlobalUniqueCols, qsize, nc
+  use hybrid_mod,       only: hybrid_t
+  use quadrature_mod,   only: quadrature_t, test_gauss, test_gausslobatto, gausslobatto
+  use prim_restart_mod, only: initrestartfile
+  use restart_io_mod ,  only: RestFile,readrestart
+  use filter_mod,       only: filter_t
+  use derivative_mod,   only: derivative_t
+  use element_mod,      only: element_t, timelevels, allocate_element_desc
+  use thread_mod,       only: omp_get_num_threads
+  use reduction_mod,    only: reductionbuffer_ordered_1d_t, red_min, red_max, red_max_int, &
+                               red_sum, red_sum_int, red_flops, initreductionbuffer
   implicit none
   private
-  public :: prim_init1, prim_init2 , prim_run_subcycle, prim_finalize
+  public :: prim_init1, prim_init2, prim_run_subcycle
 
   type (quadrature_t)   :: gp               ! element GLL points
   type (filter_t)       :: flt              ! Filter struct for v and p grid
   type (filter_t)       :: flt_advection    ! Filter struct for v grid for advection only
-  real*8  :: tot_iter
   type (ReductionBuffer_ordered_1d_t), save :: red   ! reduction buffer               (shared)
 
 contains
 
   subroutine prim_init1(elem, par, dom_mt, Tl)
 
-    ! --------------------------------
-    use thread_mod, only : nthreads, omp_get_thread_num, omp_set_num_threads, &
-                           vert_num_threads
-    ! --------------------------------
-    use control_mod, only : runtype, restartfreq, filter_counter, integration, topology, &
-         partmethod, while_iter
-    ! --------------------------------
-    use prim_state_mod, only : prim_printstate_init
-    ! --------------------------------
-    use namelist_mod, only : readnl
-    ! --------------------------------
-    use mesh_mod, only : MeshUseMeshFile
-    ! --------------------------------
-    use time_mod, only : nmax, time_at, timelevel_init, timelevel_t
-    ! --------------------------------
-    ! --------------------------------
-    use mass_matrix_mod, only : mass_matrix
-    ! --------------------------------
-    use cube_mod,  only : cubeedgecount , cubeelemcount, cubetopology
-    ! --------------------------------
-    use mesh_mod, only : MeshSetCoordinates, MeshUseMeshFile, MeshCubeTopology, &
-         MeshCubeElemCount, MeshCubeEdgeCount
-    use cube_mod, only : cube_init_atomic, rotation_init_atomic, set_corner_coordinates, assign_node_numbers_to_elem
-    ! --------------------------------
-    use metagraph_mod, only : metavertex_t, metaedge_t, localelemcount, initmetagraph
-    ! --------------------------------
-    use derivative_mod, only : allocate_subcell_integration_matrix
-    ! --------------------------------
-    use gridgraph_mod, only : gridvertex_t, gridedge_t, allocate_gridvertex_nbrs, deallocate_gridvertex_nbrs
-    ! --------------------------------
-    use schedtype_mod, only : schedule
-    ! --------------------------------
-    use schedule_mod, only : genEdgeSched,  PrintSchedule
-    ! --------------------------------
+    ! Read namelist. Init restart file. Init and partition grid(mesh). Allocate elements. Initialize mass matrix
+
+    use thread_mod,      only: nthreads, omp_get_thread_num, omp_set_num_threads
+    use control_mod,     only: runtype, restartfreq, filter_counter, integration, topology
+    use control_mod,     only: partmethod, while_iter
+    use prim_state_mod,  only: prim_printstate_init
+    use namelist_mod,    only: readnl
+    use time_mod,        only: nmax, time_at, timelevel_init, timelevel_t
+    use mass_matrix_mod, only: mass_matrix
+    use cube_mod,        only: cubeedgecount , cubeelemcount, cubetopology
+    use cube_mod,        only: cube_init_atomic, rotation_init_atomic, set_corner_coordinates, assign_node_numbers_to_elem
+    use mesh_mod,        only: MeshSetCoordinates, MeshUseMeshFile, MeshCubeTopology
+    use mesh_mod,        only: MeshCubeElemCount, MeshCubeEdgeCount
+    use metagraph_mod,   only: metavertex_t, metaedge_t, localelemcount, initmetagraph
+    use derivative_mod,  only: allocate_subcell_integration_matrix
+    use gridgraph_mod,   only: gridvertex_t, gridedge_t, allocate_gridvertex_nbrs, deallocate_gridvertex_nbrs
+    use schedtype_mod,   only: schedule
+    use schedule_mod,    only: genEdgeSched,  PrintSchedule
+    use diffusion_mod,   only: diffusion_init
+    use parallel_mod,    only: iam, parallel_t, syncmp, abortmp, global_shared_buf, nrepro_vars
+    use parallel_mod,    only: mpiinteger_t, mpireal_t, mpi_max, mpi_sum, haltmp
+    use metis_mod,       only: genmetispart
+    use spacecurve_mod,  only: genspacepart
+    use dof_mod,         only: global_dof, CreateUniqueIndex, SetElemOffset
+    use params_mod,      only: SFCURVE
+    use domain_mod,      only: domain1d_t, decompose
+    use repro_sum_mod,   only: repro_sum, repro_sum_defaultopts, repro_sum_setopts
+    use prim_advance_mod,   only: prim_advance_init
+    use physical_constants, only: dd_pi
     use prim_advection_mod, only: prim_advec_init1
-    ! --------------------------------
-    use prim_advance_mod, only: prim_advance_init
-    ! --------------------------------
-    use diffusion_mod, only      : diffusion_init
-    ! --------------------------------
-    use parallel_mod, only : iam, parallel_t, syncmp, abortmp, global_shared_buf, nrepro_vars
-#ifdef _MPI
-    use parallel_mod, only : mpiinteger_t, mpireal_t, mpi_max, mpi_sum, haltmp
-#endif
-    ! --------------------------------
-    use metis_mod, only : genmetispart
-    ! --------------------------------
-    use spacecurve_mod, only : genspacepart
-    ! --------------------------------
-    use dof_mod, only : global_dof, CreateUniqueIndex, SetElemOffset
-    ! --------------------------------
-    use params_mod, only : SFCURVE
-    ! --------------------------------
-    use domain_mod, only : domain1d_t, decompose
-    ! --------------------------------
-    use physical_constants, only : dd_pi
-    ! --------------------------------
-    use repro_sum_mod, only: repro_sum, repro_sum_defaultopts, &
-         repro_sum_setopts
 
     implicit none
 
-    type (element_t), pointer :: elem(:)
-    type (parallel_t), intent(in) :: par
-    type (domain1d_t), pointer :: dom_mt(:)
+    type (element_t),   pointer     :: elem(:)
+    type (parallel_t),  intent(in)  :: par
+    type (domain1d_t),  pointer     :: dom_mt(:)
     type (timelevel_t), intent(out) :: Tl
-    ! Local Variables
 
     type (GridVertex_t), target,allocatable :: GridVertex(:)
     type (GridEdge_t),   target,allocatable :: Gridedge(:)
@@ -127,11 +96,10 @@ contains
     logical :: repro_sum_use_ddpdd, repro_sum_recompute
     real(kind=real_kind) :: repro_sum_rel_diff_max
 
-    ! =====================================
-    ! Read in model control information
-    ! =====================================
+    ! Read namelist file
 
     call readnl(par)
+
     if (MeshUseMeshFile) then
        total_nelem = MeshCubeElemCount()
     else
@@ -144,13 +112,14 @@ contains
        if(par%masterproc) print *,"number of procs=", par%nprocs
        call abortmp('There is not enough parallelism in the job, that is, there is less than one elements per task.')
     end if
-    ! ====================================
-    ! initialize reproducible sum module
-    ! ====================================
+
+    ! Initialize reproducible sum
+
     call repro_sum_defaultopts(                           &
        repro_sum_use_ddpdd_out=repro_sum_use_ddpdd,       &
        repro_sum_rel_diff_max_out=repro_sum_rel_diff_max, &
        repro_sum_recompute_out=repro_sum_recompute        )
+
     call repro_sum_setopts(                              &
        repro_sum_use_ddpdd_in=repro_sum_use_ddpdd,       &
        repro_sum_rel_diff_max_in=repro_sum_rel_diff_max, &
@@ -159,30 +128,25 @@ contains
        repro_sum_logunit=6                           )
        if(par%masterproc) print *, "Initialized repro_sum"
 
-    ! ====================================
-    ! Set cube edge rotation type for model
-    ! unnecessary complication here: all should
-    ! be on the same footing. RDL
-    ! =====================================
+    ! Set cube edge rotation type
+
     rot_type="contravariant"
 
     if (par%masterproc) then
-       ! =============================================
-       ! Compute total simulated time...
-       ! =============================================
+
+       ! Estimate total simulated time
+
        write(iulog,*)""
        write(iulog,*)" total simulated time = ",Time_at(nmax)
        write(iulog,*)""
-       ! =============================================
-       ! Perform Gauss/Gauss Lobatto tests...
-       ! =============================================
+
+       ! Perform Gauss/Gauss Lobatto tests
+
        call test_gauss(np)
        call test_gausslobatto(np)
     end if
 
-    ! ===============================================================
     ! Allocate and initialize the graph (array of GridVertex_t types)
-    ! ===============================================================
 
     if (topology=="cube") then
 
@@ -218,8 +182,7 @@ contains
     end if
     if(par%masterproc) write(iulog,*)"total number of elements nelem = ",nelem
 
-    !debug  call PrintGridVertex(GridVertex)
-
+    ! Partition the graph
 
     if(partmethod .eq. SFCURVE) then
        if(par%masterproc) write(iulog,*)"partitioning graph using SF Curve..."
@@ -229,12 +192,10 @@ contains
        call genmetispart(GridEdge,GridVertex)
     endif
 
-    ! ===========================================================
-    ! given partition, count number of local element descriptors
-    ! ===========================================================
+    ! Given partition, count number of local element descriptors
+
     allocate(MetaVertex(1))
     allocate(Schedule(1))
-
 
     nelem_edge=SIZE(GridEdge)
 
@@ -245,62 +206,39 @@ contains
        HeadPartition(i)=GridEdge(i)%head%processor_number
     enddo
 
-    ! ====================================================
-    !  Generate the communication graph
-    ! ====================================================
+    !  Generate communication graph
+
     call initMetaGraph(iam,MetaVertex(1),GridVertex,GridEdge)
 
-
     nelemd = LocalElemCount(MetaVertex(1))
-
     if(nelemd .le. 0) then
        call abortmp('Not yet ready to handle nelemd = 0 yet' )
        stop
     endif
-#ifdef _MPI
-    call mpi_allreduce(nelemd,nelemdmax,1,MPIinteger_t,MPI_MAX,par%comm,ierr)
-#else
-    nelemdmax=nelemd
-#endif
 
+    call mpi_allreduce(nelemd,nelemdmax,1,MPIinteger_t,MPI_MAX,par%comm,ierr)
 
     if (nelemd>0) then
        allocate(elem(nelemd))
        call allocate_element_desc(elem)
     endif
 
-    ! ====================================================
-    !  Generate the communication schedule
-    ! ====================================================
+    !  Generate communication schedule
 
     call genEdgeSched(elem,iam,Schedule(1),MetaVertex(1))
 
-
     allocate(global_shared_buf(nelemd,nrepro_vars))
     global_shared_buf=0.0_real_kind
-    !  nlyr=edge3p1%nlyr
-    !  call MessageStats(nlyr)
-    !  call testchecksum(par,GridEdge)
-
-    ! ========================================================
-    ! load graph information into local element descriptors
-    ! ========================================================
-
-    !  do ii=1,nelemd
-    !     elem(ii)%vertex = MetaVertex(iam)%members(ii)
-    !  enddo
 
     call syncmp(par)
 
-    ! =================================================================
     ! Set number of domains (for 'decompose') equal to number of threads
-    !  for OpenMP across elements, equal to 1 for OpenMP within element
-    ! =================================================================
+    ! for OpenMP across elements, equal to 1 for OpenMP within element
+
     n_domains = min(Nthreads,nelemd)
 
-    ! =================================================================
-    ! Initialize shared boundary_exchange and reduction buffers
-    ! =================================================================
+    ! Initialize boundary_exchange and reduction buffers
+
     if(par%masterproc) write(iulog,*) 'init shared boundary_exchange buffers'
     call InitReductionBuffer(red,3*nlev,n_domains)
     call InitReductionBuffer(red_sum,5)
@@ -310,11 +248,10 @@ contains
     call InitReductionBuffer(red_min,1)
     call initReductionBuffer(red_flops,1)
 
-
     gp=gausslobatto(np)  ! GLL points
 
     if (topology=="cube") then
-       if(par%masterproc) write(iulog,*) "initializing cube elements..."
+       if(par%masterproc) write(iulog,*) "initializing cube elements"
        if (MeshUseMeshFile) then
            call MeshSetCoordinates(elem)
        else
@@ -328,9 +265,8 @@ contains
        enddo
     end if
 
-    ! =================================================================
     ! Initialize mass_matrix
-    ! =================================================================
+
     if(par%masterproc) write(iulog,*) 'running mass_matrix'
     call mass_matrix(par,elem)
     allocate(aratio(nelemd,1))
@@ -352,20 +288,15 @@ contains
        enddo
     end if
 
-
     if(par%masterproc) write(iulog,*) 're-running mass_matrix'
     call mass_matrix(par,elem)
 
+    ! Determine global degrees of freedom for each gridpoint
 
-    ! =================================================================
-    ! Determine the global degree of freedome for each gridpoint
-    ! =================================================================
     if(par%masterproc) write(iulog,*) 'running global_dof'
     call global_dof(par,elem)
 
-    ! =================================================================
     ! Create Unique Indices
-    ! =================================================================
 
     do ie=1,nelemd
        call CreateUniqueIndex(elem(ie)%GlobalId,elem(ie)%gdofP,elem(ie)%idxP)
@@ -377,47 +308,38 @@ contains
        elem(ie)%idxV=>elem(ie)%idxP
     end do
 
-    !JMD call PrintDofP(elem)
-    !JMD call PrintDofV(elem)
-
-
-
     call prim_printstate_init(par)
-    ! Initialize output fields for plotting...
 
+    ! Initialize output fields for plotting
 
     while_iter = 0
     filter_counter = 0
 
-    ! initialize flux terms to 0
+    ! Initialize flux terms
 
     do ie=1,nelemd
-       elem(ie)%derived%FM=0.0
-       elem(ie)%derived%FQ=0.0
-       elem(ie)%derived%FQps=0.0
-       elem(ie)%derived%FT=0.0
-       elem(ie)%derived%pecnd=0.0
+       elem(ie)%derived%FM    = 0.0
+       elem(ie)%derived%FQ    = 0.0
+       elem(ie)%derived%FQps  = 0.0
+       elem(ie)%derived%FT    = 0.0
+       elem(ie)%derived%pecnd = 0.0
 
-       elem(ie)%accum%Qvar=0
-       elem(ie)%accum%Qmass=0
-       elem(ie)%accum%Q1mass=0
+       elem(ie)%accum%Qvar    = 0.0
+       elem(ie)%accum%Qmass   = 0.0
+       elem(ie)%accum%Q1mass  = 0.0
 
-       elem(ie)%derived%Omega_p=0
-       elem(ie)%state%dp3d=0
+       elem(ie)%derived%Omega_p=0.0
+       elem(ie)%state%dp3d     =0.0
 
     enddo
 
-
-    ! ==========================================================
-    !  This routines initalizes a Restart file.  This involves:
-    !      I)  Setting up the MPI datastructures
-    ! ==========================================================
+    !  Initalize restart file, if needed
 
     if(restartfreq > 0 .or. runtype>=1)  then
        call initRestartFile(elem(1)%state,par,RestFile)
     endif
 
-    !DBG  write(iulog,*) 'prim_init: after call to initRestartFile'
+    ! Deallocate temporary grid structures
 
     deallocate(GridEdge)
     do j =1,nelem
@@ -435,9 +357,8 @@ contains
     n_domains = min(Nthreads,nelemd)
     call omp_set_num_threads(n_domains)
 
-    ! =====================================
-    ! Set number of threads...
-    ! =====================================
+    ! Set number of threads
+
     if(par%masterproc) then
        write(iulog,*) "Main:NThreads=",NThreads
        write(iulog,*) "Main:n_domains = ",n_domains
@@ -451,78 +372,71 @@ contains
     nets=1
     nete=nelemd
 
+    ! Initialize prim_advance, prim_advec, hyperviscosity
+
     call prim_advance_init(par,integration)
     call Prim_Advec_Init1(par, n_domains)
     call diffusion_init(par)
 
-    ! =======================================================
     ! Allocate memory for subcell flux calculations.
-    ! =======================================================
+
     call allocate_subcell_integration_matrix(np, nc)
 
     call TimeLevel_init(tl)
     if(par%masterproc) write(iulog,*) 'end of prim_init'
   end subroutine prim_init1
-!=======================================================================================================!
+
+  !_____________________________________________________________________
 
   subroutine prim_init2(elem, hybrid, nets, nete, tl, hvcoord)
 
-    use parallel_mod, only : parallel_t, haltmp, syncmp, abortmp
-    use time_mod, only : timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, nsplit, TimeLevel_Qdp
-    use prim_state_mod, only : prim_printstate, prim_diag_scalars
-    use filter_mod, only : filter_t, fm_filter_create, taylor_filter_create, &
-         fm_transfer, bv_transfer
-    use control_mod, only : runtype, integration, filter_mu, filter_mu_advection, test_case, &
-        vfile_int, filter_freq, filter_freq_advection, &
-         transfer_type, vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, &
-         s_bv, topology, moisture, rsplit, qsplit, rk_stage_user,&
-         sub_case, &
-         limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle, &
-         hypervis_subcycle_q
-    use control_mod, only : tracer_transport_type
-    use control_mod, only : pertlim                     !used for homme temperature perturbations
-    use prim_si_ref_mod, only:  prim_set_mass
+    ! Compute CFL. Initialize restart runs, test-cases, and derivatives
+
+    use parallel_mod,         only: parallel_t, haltmp, syncmp, abortmp
+    use time_mod,             only: timelevel_t, tstep, phys_tscale, timelevel_init, nendstep, nsplit, TimeLevel_Qdp
+    use prim_state_mod,       only: prim_printstate, prim_diag_scalars
+    use filter_mod,           only: filter_t, fm_filter_create, taylor_filter_create, fm_transfer, bv_transfer
+    use control_mod,          only: runtype, integration, filter_mu, filter_mu_advection, test_case, &
+                                    vfile_int, filter_freq, filter_freq_advection, &
+                                    transfer_type, vform, vfile_mid, filter_type, kcut_fm, wght_fm, p_bv, &
+                                    s_bv, topology, moisture, rsplit, qsplit, rk_stage_user,&
+                                    sub_case, hypervis_subcycle_q, &
+                                    limiter_option, nu, nu_q, nu_div, tstep_type, hypervis_subcycle
+    use control_mod,          only: tracer_transport_type
+    use control_mod,          only: pertlim                     !used for homme temperature perturbations
+    use prim_si_ref_mod,      only: prim_set_mass
+    use thread_mod,           only: nthreads
+    use derivative_mod,       only: derivinit, v2pinit
+    use global_norms_mod,     only: test_global_integral, print_cfl
+    use hybvcoord_mod,        only: hvcoord_t
+    use prim_advection_mod,   only: prim_advec_init2, deriv
+    use baroclinic_inst_mod,  only: binst_init_state, jw_baroclinic
+    use asp_tests,            only: asp_tracer, asp_baroclinic, asp_rossby
+    use asp_tests,            only: asp_mountain, asp_gravity_wave, dcmip2_schar
+    use dcmip_wrapper_mod,    only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
+
 #ifdef TRILINOS
     use prim_derived_type_mod ,only : derived_type, initialize
     use, intrinsic :: iso_c_binding
 #endif
-    use thread_mod, only : nthreads
-    use derivative_mod, only : derivinit, v2pinit
-    use global_norms_mod, only : test_global_integral, print_cfl
-    use hybvcoord_mod, only : hvcoord_t
-    use prim_advection_mod, only: prim_advec_init2, deriv
-    use baroclinic_inst_mod, only : binst_init_state, jw_baroclinic
-    use asp_tests, only : asp_tracer, asp_baroclinic, asp_rossby, asp_mountain, asp_gravity_wave, dcmip2_schar
-    use dcmip_wrapper_mod, only: set_dcmip_1_1_fields, set_dcmip_1_2_fields
 
 #if USE_CUDA_FORTRAN
     use cuda_mod, only: cuda_mod_init
 #endif
 
-    type (element_t), intent(inout) :: elem(:)
-    type (hybrid_t), intent(in) :: hybrid
+    type (element_t),   intent(inout) :: elem(:)
+    type (hybrid_t),    intent(in)    :: hybrid
+    type (TimeLevel_t), intent(inout) :: tl       ! time level struct
+    type (hvcoord_t),   intent(inout) :: hvcoord  ! hybrid vertical coordinate struct
+    integer,            intent(in)    :: nets     ! starting thread element number (private)
+    integer,            intent(in)    :: nete     ! ending thread element number   (private)
 
-    type (TimeLevel_t), intent(inout)    :: tl              ! time level struct
-    type (hvcoord_t), intent(inout)      :: hvcoord         ! hybrid vertical coordinate struct
-
-     integer, intent(in)                     :: nets  ! starting thread element number (private)
-    integer, intent(in)                     :: nete  ! ending thread element number   (private)
-
-
-    ! ==================================
-    ! Local variables
-    ! ==================================
-
-    real (kind=real_kind) :: dt              ! "timestep dependent" timestep
-!   variables used to calculate CFL
-    real (kind=real_kind) :: dtnu            ! timestep*viscosity parameter
-    real (kind=real_kind) :: dt_dyn_vis      ! viscosity timestep used in dynamics
+    real (kind=real_kind) :: dt                 ! timestep size
+    real (kind=real_kind) :: dtnu               ! timestep*viscosity parameter
+    real (kind=real_kind) :: dt_dyn_vis         ! viscosity timestep used in dynamics
     real (kind=real_kind) :: dt_tracer_vis      ! viscosity timestep used in tracers
-
     real (kind=real_kind) :: dp
-
-
-    real (kind=real_kind) :: ps(np,np)       ! surface pressure
+    real (kind=real_kind) :: ps(np,np)          ! surface pressure
 
     character(len=80)     :: fname
     character(len=8)      :: njusn
@@ -536,14 +450,11 @@ contains
     integer :: nfrc
     integer :: n0_qdp
 
-
-    ! ==========================
-    ! begin executable code
-    ! ==========================
     if (topology == "cube") then
        call test_global_integral(elem, hybrid,nets,nete)
     end if
 
+    ! Compute CFL timestep limits
 
     ! compute most restrictive dt*nu for use by variable res viscosity:
     if (tstep_type == 0) then
@@ -569,20 +480,12 @@ contains
     endif
 
 
-    ! ==================================
     ! Initialize derivative structure
-    ! ==================================
+
     call Prim_Advec_Init2(hybrid)
 
-    ! ====================================
-    ! In the semi-implicit case:
-    ! initialize vertical structure and
-    ! related matrices..
-    ! ====================================
-    ! ==========================================
-    ! Initialize pressure and velocity grid
-    ! filter matrix...
-    ! ==========================================
+    ! Initialize pressure and velocity filters
+
     if (transfer_type == "bv") then
        Tp    = bv_transfer(p_bv,s_bv,np)
     else if (transfer_type == "fm") then
@@ -595,8 +498,6 @@ contains
        flt           = fm_filter_create(Tp, filter_mu, gp)
        flt_advection = fm_filter_create(Tp, filter_mu_advection, gp)
     end if
-
-
 
     if (hybrid%masterthread) then
        if (filter_freq>0 .or. filter_freq_advection>0) then
@@ -620,18 +521,16 @@ contains
 #endif
 
     if (topology /= "cube") then
-       call abortmp('Error: only cube topology supported for primaitve equations')
+       call abortmp('Error: only cube topology supported for primative equations')
     endif
 
-    ! =================================
-    ! HOMME stand alone initialization
-    ! =================================
+    ! Set initial conditions based on run-type
 
     if(runtype >= 1) then
-       ! ===========================================================
+
        ! runtype==1   Exact Restart
        ! runtype==2   Initial run, but take inital condition from Restart file
-       ! ===========================================================
+
        if (hybrid%masterthread) then
           write(iulog,*) 'runtype: RESTART of primitive equations'
        end if
@@ -639,28 +538,27 @@ contains
        call ReadRestart(elem,hybrid%ithr,nets,nete,tl)
 
        ! scale PS to achieve prescribed dry mass
-       if (runtype /= 1) &
-            call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
+       if (runtype /= 1) call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
 
        if (runtype==2) then
           ! copy prognostic variables:  tl%n0 into tl%nm1
           do ie=nets,nete
-             elem(ie)%state%v(:,:,:,:,tl%nm1)=elem(ie)%state%v(:,:,:,:,tl%n0)
-             elem(ie)%state%T(:,:,:,tl%nm1)=elem(ie)%state%T(:,:,:,tl%n0) 
-             elem(ie)%state%ps_v(:,:,tl%nm1)=elem(ie)%state%ps_v(:,:,tl%n0)
-             elem(ie)%state%lnps(:,:,tl%nm1)=elem(ie)%state%lnps(:,:,tl%n0)
+             elem(ie)%state%v(:,:,:,:,tl%nm1) = elem(ie)%state%v(:,:,:,:,tl%n0)
+             elem(ie)%state%T(:,:,:,tl%nm1)   = elem(ie)%state%T(:,:,:,tl%n0)
+             elem(ie)%state%ps_v(:,:,tl%nm1)  = elem(ie)%state%ps_v(:,:,tl%n0)
+             elem(ie)%state%lnps(:,:,tl%nm1)  = elem(ie)%state%lnps(:,:,tl%n0)
           enddo
        endif ! runtype==2
+
     else  ! initial run  RUNTYPE=0
-       ! ===========================================================
-       ! Initial Run  - compute initial condition
-       ! ===========================================================
-       if (hybrid%masterthread) then
+
+        ! Initial Run  - compute initial condition
+
+        if (hybrid%masterthread) then
           write(iulog,*) ' runtype: INITIAL primitive equations'
        endif
-       ! ========================================================
-       ! Initialize the test cases
-       ! ========================================================
+
+       ! Initialize test cases, for new runs
 
        if(test_case(1:8)=="dcmip1-1") then
           if (hybrid%masterthread) then
@@ -684,27 +582,32 @@ contains
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing ASP gravity wave test'
           end if
+
           call asp_gravity_wave(elem, hybrid,hvcoord,nets,nete, sub_case)
        else if (test_case(1:12) == "asp_mountain") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing ASP mountain Rossby test'
           end if
+
           call asp_mountain(elem, hybrid,hvcoord,nets,nete)
        else if (test_case(1:10) == "asp_rossby") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing ASP Rossby Haurwitz test'
           end if
+
           call asp_rossby(elem, hybrid,hvcoord,nets,nete)
        else if (test_case(1:10) == "asp_tracer") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing pure tracer advection tests'
           end if
+
           call asp_tracer(elem, hybrid,hvcoord,nets,nete)
        else if (test_case(1:14) == "asp_baroclinic") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing Jablonowski and Williamson ASP baroclinic instability test'
           end if
           call asp_baroclinic(elem, hybrid,hvcoord,nets,nete)
+
        else if (test_case(1:13) == "jw_baroclinic") then
           if (hybrid%masterthread) then
              write(iulog,*) 'initializing Jablonowski and Williamson baroclinic instability test V1'
@@ -716,6 +619,7 @@ contains
              write(iulog,*) 'initializing DCMIP2 test 2-0'
           end if
           call dcmip2_schar(elem, hybrid,hvcoord,nets,nete)
+
        else
           call abortmp('Error: unrecognized test case')
        endif
@@ -724,20 +628,16 @@ contains
           write(iulog,*) '...done'
        end if
 
-       ! scale PS to achieve prescribed dry mass
+       ! scale surface pressure to achieve prescribed dry mass
+
        call prim_set_mass(elem, tl,hybrid,hvcoord,nets,nete)
 
        do ie=nets,nete
 
-          elem(ie)%state%T=elem(ie)%state%T &
-                * (1.0_real_kind + pertlim)  ! set perlim in ctl_nl namelist for
-                                             ! temperature field initial
-                                             ! perterbation
+          ! set perlim in ctl_nl namelist for temperature field initial perterbation
+          elem(ie)%state%T=elem(ie)%state%T * (1.0_real_kind + pertlim)
        enddo
- 
-       ! ========================================
-       ! Print state and movie output
-       ! ========================================
+
     end if  ! runtype
 
 !$OMP MASTER
@@ -783,24 +683,18 @@ contains
        enddo
     endif
 
+    ! Print limiting CFL values
 
-
-
-    ! timesteps to use for advective stability:  tstep*qsplit and tstep
     call print_cfl(elem,hybrid,nets,nete,dtnu)
 
     if (hybrid%masterthread) then
-       ! CAM has set tstep based on dtime before calling prim_init2(),
-       ! so only now does HOMME learn the timstep.  print them out:
-       write(iulog,'(a,2f9.2)') "dt_remap: (0=disabled)   ",tstep*qsplit*rsplit
-
+       write(iulog,'(a,2f9.2)')    "dt_remap: (0=disabled)   ",tstep*qsplit*rsplit
        if (qsize>0) then
           write(iulog,'(a,2f9.2)') "dt_tracer (SE), per RK stage: ",tstep*qsplit,(tstep*qsplit)/(rk_stage_user-1)
        end if
        write(iulog,'(a,2f9.2)')    "dt_dyn:                  ",tstep
        write(iulog,'(a,2f9.2)')    "dt_dyn (viscosity):      ",dt_dyn_vis
        write(iulog,'(a,2f9.2)')    "dt_tracer (viscosity):   ",dt_tracer_vis
-
     end if
 
 
@@ -808,77 +702,72 @@ contains
     !Inside this routine, we enforce an OMP BARRIER and an OMP MASTER. It's left out of here because it's ugly
     call cuda_mod_init(elem,hybrid,deriv(hybrid%ithr),hvcoord)
 #endif
+
+    ! Print initial state
+
     if (hybrid%masterthread) write(iulog,*) "initial state:"
     call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
 
   end subroutine prim_init2
 
-!=======================================================================================================!
-
-
+!_______________________________________________________________________
 
 
   subroutine prim_run_subcycle(elem, hybrid,nets,nete, dt, tl, hvcoord,nsubstep)
-!
-!   advance all variables (u,v,T,ps,Q,C) from time t to t + dt_q
-!
-!   input:
-!       tl%nm1   not used
-!       tl%n0    data at time t
-!       tl%np1   new values at t+dt_q
-!
-!   then we update timelevel pointers:
-!       tl%nm1 = tl%n0
-!       tl%n0  = tl%np1
-!   so that:
-!       tl%nm1   tracers:  t    dynamics:  t+(qsplit-1)*dt
-!       tl%n0    time t + dt_q
-!
-!
-    use hybvcoord_mod, only : hvcoord_t
-    use time_mod, only : TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
-    use control_mod, only: statefreq,&
-           energy_fixer, ftype, qsplit, rsplit, test_cfldep, disable_diagnostics
-    use prim_state_mod, only : prim_printstate, prim_diag_scalars, prim_energy_halftimes
-    use parallel_mod, only : abortmp
-    use reduction_mod, only : parallelmax
+
+    !   advance all variables (u,v,T,ps,Q,C) from time t to t + dt_q
+    !
+    !   input:
+    !       tl%nm1   not used
+    !       tl%n0    data at time t
+    !       tl%np1   new values at t+dt_q
+    !
+    !   then we update timelevel pointers:
+    !       tl%nm1 = tl%n0
+    !       tl%n0  = tl%np1
+    !   so that:
+    !       tl%nm1   tracers:  t    dynamics:  t+(qsplit-1)*dt
+    !       tl%n0    time t + dt_q
+
+    use hybvcoord_mod,  only: hvcoord_t
+    use time_mod,       only: TimeLevel_t, timelevel_update, timelevel_qdp, nsplit
+    use control_mod,    only: statefreq, energy_fixer, ftype, qsplit
+    use control_mod,    only: rsplit, test_cfldep, disable_diagnostics
+    use prim_state_mod, only: prim_printstate, prim_diag_scalars, prim_energy_halftimes
+    use parallel_mod,   only: abortmp
+    use reduction_mod,  only: parallelmax
     use prim_advection_mod, only : vertical_remap
+
 #if USE_CUDA_FORTRAN
     use cuda_mod, only: copy_qdp_h2d, copy_qdp_d2h
 #endif
 
+    type (element_t) ,    intent(inout) :: elem(:)
+    type (hybrid_t),      intent(in)    :: hybrid   ! distributed parallel structure (shared)
+    type (hvcoord_t),     intent(in)    :: hvcoord  ! hybrid vertical coordinate struct
+    integer,              intent(in)    :: nets     ! starting thread element number (private)
+    integer,              intent(in)    :: nete     ! ending thread element number   (private)
+    real(kind=real_kind), intent(in)    :: dt       ! "timestep dependent" timestep
+    type (TimeLevel_t),   intent(inout) :: tl       ! time level
+    integer,              intent(in)    :: nsubstep ! nsubstep = 1 .. nsplit
 
-    type (element_t) , intent(inout)        :: elem(:)
-
-    type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-
-    type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
-
-    integer, intent(in)                     :: nets  ! starting thread element number (private)
-    integer, intent(in)                     :: nete  ! ending thread element number   (private)
-    real(kind=real_kind), intent(in)        :: dt  ! "timestep dependent" timestep
-    type (TimeLevel_t), intent(inout)       :: tl
-    integer, intent(in)                     :: nsubstep  ! nsubstep = 1 .. nsplit
     real(kind=real_kind) :: st, st1, dp, dt_q, dt_remap
     integer :: ie, t, q,k,i,j,n
     integer :: n0_qdp,np1_qdp,r, nstep_end
 
-    real (kind=real_kind)                          :: maxcflx, maxcfly
+    real (kind=real_kind) :: maxcflx, maxcfly
     real (kind=real_kind) :: dp_np1(np,np)
     logical :: compute_diagnostics, compute_energy
 
+    ! Get tracer and remap timesteps
 
-    ! ===================================
-    ! Main timestepping loop
-    ! ===================================
-    dt_q = dt*qsplit
-    dt_remap = dt_q
+    dt_q      = dt*qsplit
+    dt_remap  = dt_q
     nstep_end = tl%nstep + qsplit
-
-
 
     ! compute diagnostics and energy for STDOUT
     ! compute energy if we are using an energy fixer
+
     compute_diagnostics=.false.
     compute_energy=energy_fixer > 0
 
@@ -889,28 +778,28 @@ contains
 
     if(disable_diagnostics) compute_diagnostics=.false.
 
-    if (compute_diagnostics) &
-       call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
+    if (compute_diagnostics) call prim_diag_scalars(elem,hvcoord,tl,4,.true.,nets,nete)
 
+    ! Get E(1) Energy after CAM forcing
 
-
-    ! E(1) Energy after CAM forcing
     if (compute_energy) call prim_energy_halftimes(elem,hvcoord,tl,1,.true.,nets,nete)
 
-    ! qmass and variance, using Q(n0),Qdp(n0)
-    if (compute_diagnostics) call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
+    ! Get qmass and variance, using Q(n0),Qdp(n0)
 
+    if (compute_diagnostics) call prim_diag_scalars(elem,hvcoord,tl,1,.true.,nets,nete)
 
 #if USE_CUDA_FORTRAN
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call copy_qdp_h2d( elem , n0_qdp )
 #endif
 
-    ! take a timestep of trancers and dynamis
+    ! Take tracers and dynamics steps
+
     call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
     call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
 
-    ! vertical remap
+    ! Perform vertical remap
+
     call vertical_remap(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,nets,nete)
 
 #if USE_CUDA_FORTRAN
@@ -918,11 +807,10 @@ contains
     call copy_qdp_d2h( elem , np1_qdp )
 #endif
 
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ! time step is complete.  update some diagnostic variables:
+    ! Update some diagnostic variables:
     ! lnps (we should get rid of this)
     ! Q    (mixing ratio)
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     do ie=nets,nete
        elem(ie)%state%lnps(:,:,tl%np1)= LOG(elem(ie)%state%ps_v(:,:,tl%np1))
 #if (defined COLUMN_OPENMP)
@@ -940,27 +828,22 @@ contains
        enddo
     enddo
 
-
-
-
-
     ! now we have:
     !   u(nm1)   dynamics at  t+dt_remap - 2*dt
     !   u(n0)    dynamics at  t+dt_remap - dt
     !   u(np1)   dynamics at  t+dt_remap
-    !
-    !   Q(1)   Q at t+dt_remap
+    !   Q(1)     Q at t+dt_remap
+
     if (compute_diagnostics) call prim_diag_scalars(elem,hvcoord,tl,2,.false.,nets,nete)
-    if (compute_energy) call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
+    if (compute_energy)      call prim_energy_halftimes(elem,hvcoord,tl,2,.false.,nets,nete)
 
     if (compute_diagnostics) then
        call prim_diag_scalars(elem,hvcoord,tl,3,.false.,nets,nete)
        call prim_energy_halftimes(elem,hvcoord,tl,3,.false.,nets,nete)
      endif
 
-    ! =================================
-    ! update dynamics time level pointers
-    ! =================================
+    ! Update dynamics time level pointers
+
     call TimeLevel_update(tl,"leapfrog")
 
     ! now we have:
@@ -969,63 +852,58 @@ contains
     !   u(np1)   undefined
 
 
-    ! ============================================================
-    ! Print some diagnostic information
-    ! ============================================================
+    ! Print diagnostic information
+
     if (compute_diagnostics) then
        call prim_printstate(elem, tl, hybrid,hvcoord,nets,nete)
     end if
+
   end subroutine prim_run_subcycle
 
-
-
-
-
+  !_____________________________________________________________________
 
   subroutine prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord, compute_diagnostics,rstep)
-!
-!   Take qsplit dynamics steps and one tracer step
-!   for vertically lagrangian option, this subroutine does only the horizontal step
-!
-!   input:
-!       tl%nm1   not used
-!       tl%n0    data at time t
-!       tl%np1   new values at t+dt_q
-!
-!   then we update timelevel pointers:
-!       tl%nm1 = tl%n0
-!       tl%n0  = tl%np1
-!   so that:
-!       tl%nm1   tracers:  t    dynamics:  t+(qsplit-1)*dt
-!       tl%n0    time t + dt_q
-!
-!
-    use hybvcoord_mod, only : hvcoord_t
-    use time_mod, only : TimeLevel_t, timelevel_update, nsplit
-    use control_mod, only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
-    use control_mod, only : tracer_transport_type
-    use control_mod, only : tracer_grid_type, TRACER_GRIDTYPE_GLL
-    use prim_advance_mod, only : prim_advance_exp
-    use prim_advection_mod, only : prim_advec_tracers_remap, deriv
-    use derivative_mod, only : subcell_integration
-    use parallel_mod, only : abortmp
-    use reduction_mod, only : parallelmax
-    use time_mod,    only : time_at
 
-    type (element_t) , intent(inout)        :: elem(:)
-    type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-    type (hvcoord_t), intent(in)      :: hvcoord         ! hybrid vertical coordinate struct
+    !   Take qsplit dynamics steps and one tracer step
+    !   for vertically lagrangian option, this subroutine does only the horizontal step
+    !
+    !   input:
+    !       tl%nm1   not used
+    !       tl%n0    data at time t
+    !       tl%np1   new values at t+dt_q
+    !
+    !   then we update timelevel pointers:
+    !       tl%nm1 = tl%n0
+    !       tl%n0  = tl%np1
+    !   so that:
+    !       tl%nm1   tracers:  t    dynamics:  t+(qsplit-1)*dt
+    !       tl%n0    time t + dt_q
 
-    integer, intent(in)                     :: nets  ! starting thread element number (private)
-    integer, intent(in)                     :: nete  ! ending thread element number   (private)
-    real(kind=real_kind), intent(in)        :: dt  ! "timestep dependent" timestep
-    type (TimeLevel_t), intent(inout)       :: tl
-    integer, intent(in)                     :: rstep ! vertical remap subcycling step
+    use hybvcoord_mod,  only: hvcoord_t
+    use time_mod,       only: TimeLevel_t, timelevel_update, nsplit
+    use control_mod,    only: statefreq, integration, ftype, qsplit, nu_p, test_cfldep, rsplit
+    use control_mod,    only: tracer_transport_type
+    use control_mod,    only: tracer_grid_type, TRACER_GRIDTYPE_GLL
+    use derivative_mod, only: subcell_integration
+    use parallel_mod,   only: abortmp
+    use reduction_mod,  only: parallelmax
+    use time_mod,       only: time_at
+    use prim_advance_mod,   only: prim_advance_exp
+    use prim_advection_mod, only: prim_advec_tracers_remap, deriv
+
+    type (element_t) ,    intent(inout) :: elem(:)
+    type (hybrid_t),      intent(in)    :: hybrid   ! distributed parallel structure (shared)
+    type (hvcoord_t),     intent(in)    :: hvcoord  ! hybrid vertical coordinate struct
+    integer,              intent(in)    :: nets     ! starting thread element number (private)
+    integer,              intent(in)    :: nete     ! ending thread element number   (private)
+    real(kind=real_kind), intent(in)    :: dt       ! "timestep dependent" timestep
+    type (TimeLevel_t),   intent(inout) :: tl       ! time level struct
+    integer,              intent(in)    :: rstep    ! vertical remap subcycling step
 
     real(kind=real_kind) :: st, st1, dp, dt_q
     integer :: ie, t, q,k,i,j,n
 
-    real (kind=real_kind)                          :: maxcflx, maxcfly
+    real (kind=real_kind) :: maxcflx, maxcfly
 
     real (kind=real_kind) ::  tempdp3d(np,np), x
     real (kind=real_kind) ::  tempmass(nc,nc)
@@ -1036,10 +914,9 @@ contains
 
     dt_q = dt*qsplit
  
-    ! ===============
-    ! initialize mean flux accumulation variables and save some variables at n0
+    ! Initialize mean flux accumulation variables and save some variables at n0
     ! for use by advection
-    ! ===============
+
     do ie=nets,nete
       elem(ie)%derived%eta_dot_dpdn=0     ! mean vertical mass flux
       elem(ie)%derived%vn0=0              ! mean horizontal mass flux
@@ -1049,7 +926,8 @@ contains
          elem(ie)%derived%dpdiss_biharmonic=0
       endif
 
-        ! save dp at time t for use in tracers
+    ! Save dp at time t for use in tracers
+
 #if (defined COLUMN_OPENMP)
 !$omp parallel do default(shared), private(k)
 #endif
@@ -1060,35 +938,15 @@ contains
          enddo
     enddo
 
-    ! ===============
-    ! compute analytic winds
-    ! ===============
-    call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord,   &
-         hybrid, dt, tl, nets, nete, compute_diagnostics)
+    ! Advance dynamics
 
-    ! ===============
-    ! advance tracers
-    ! ===============
-    call Prim_Advec_Tracers_remap(elem, deriv(hybrid%ithr),hvcoord,flt_advection,hybrid,&
-         dt_q,tl,nets,nete)
+    call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord, hybrid, dt, tl, nets, nete, compute_diagnostics)
 
+    ! Advance tracers
+
+    call Prim_Advec_Tracers_remap(elem, deriv(hybrid%ithr),hvcoord,flt_advection,hybrid,dt_q,tl,nets,nete)
 
   end subroutine prim_step
-
-
-!=======================================================================================================!
-
-
-  subroutine prim_finalize(hybrid)
-    type (hybrid_t), intent(in)           :: hybrid  ! distributed parallel structure (shared)
-
-
-    ! ==========================
-    ! end of the hybrid program
-    ! ==========================
-  end subroutine prim_finalize
-
-
 
 end module prim_driver_mod
 

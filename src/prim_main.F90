@@ -17,7 +17,7 @@ program prim_main
   use common_movie_mod, only: nextoutputstep
   use perf_mod,         only: t_initf, t_prf, t_finalizef, t_startf, t_stopf
   use control_mod,      only: restartfreq, vfile_mid, vfile_int, runtype
-  use prim_driver_mod,  only: prim_init1, prim_init2, prim_finalize, prim_run_subcycle
+  use prim_driver_mod,  only: prim_init1, prim_init2, prim_run_subcycle
   use thread_mod,       only: nthreads, vert_num_threads, omp_get_thread_num, &
                               omp_set_num_threads, omp_get_nested, &
                               omp_get_num_threads, omp_get_max_threads
@@ -195,7 +195,6 @@ program prim_main
   ! Write final history file
 
   if(par%masterproc) print *,"Finished main timestepping loop",tl%nstep
-  call prim_finalize(hybrid)
   if(par%masterproc) print *,"closing history files"
 #ifdef PIO_INTERP
   call interp_movie_finish
