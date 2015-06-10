@@ -13,9 +13,7 @@ module interpolate_mod
   use physical_constants,     only : DD_PI
   use quadrature_mod,         only : quadrature_t, gauss, gausslobatto
   use parallel_mod,           only : abortmp, syncmp, parallel_t, MPIreal_t, MPIinteger_t
-#ifdef _MPI
   use parallel_mod,           only : MPI_MAX, MPI_SUM, MPI_MIN
-#endif
   use cube_mod,               only : convert_gbl_index, dmap, ref2sphere
   use mesh_mod,               only : MeshUseMeshFile
   use control_mod,            only : cubed_sphere_map
@@ -1269,18 +1267,18 @@ module interpolate_mod
        endif
     enddo
     err2=err
-#ifdef _MPI
+
     call MPI_Allreduce(err,err2,1,MPIreal_t,MPI_MAX,par%comm,ierr)
-#endif
+
     if (par%masterproc) then
        write(iulog,'(a,e12.4)') 'Max interpolation point search error: ',err2
     endif
 
     ! if multile elements claim a interpolation point, take the one with largest gid:
     global_elem_gid = local_elem_gid
-#ifdef _MPI
+
     call MPI_Allreduce(local_elem_gid, global_elem_gid, nlat*nlon, MPIinteger_t, MPI_MAX, par%comm,ierr)
-#endif
+
 
     missing_pts=0
     do j=1,nlat
@@ -1298,9 +1296,8 @@ module interpolate_mod
 
     countx=maxval(interpdata(1:nelemd)%n_interp)
     count_max = countx
-#ifdef _MPI
+
     call MPI_Allreduce(countx,count_max,1,MPIinteger_t,MPI_MAX,par%comm,ierr)
-#endif
 
     if (par%masterproc) then
        write(iulog,'(a,i6)') 'Maximum number of interpolation points claimed by an element: ',count_max
@@ -1357,9 +1354,9 @@ module interpolate_mod
        enddo
     enddo
     global_elem_gid = local_elem_gid
-#ifdef _MPI
+
     call MPI_Allreduce(local_elem_gid, global_elem_gid, nlat*nlon, MPIinteger_t, MPI_SUM, par%comm,ierr)
-#endif
+
     if (par%masterproc) then
        countx=0
        do j=1,nlat

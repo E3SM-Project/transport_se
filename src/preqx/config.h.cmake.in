@@ -9,9 +9,6 @@
 /* _PRESTART */
 #define _PRESTART 1
 
-/* Using MPI */
-#define _MPI 1
-
 /* PIO with interpolation */
 #cmakedefine PIO_INTERP
 

@@ -11,11 +11,7 @@ module prim_movie_mod
   ! ---------------------
   use hybvcoord_mod, only :  hvcoord_t 
   ! ---------------------
-#ifdef _MPI
   use parallel_mod, only : syncmp, iam, mpireal_t, mpi_max, mpi_sum, mpiinteger_t, parallel_t, haltmp, abortmp
-#else
-  use parallel_mod, only : syncmp, iam, mpireal_t, parallel_t
-#endif
   ! ---------------------
   use time_mod, only : Timelevel_t, tstep, ndays, time_at, secpday, nendstep,nmax
   ! ---------------------
@@ -131,10 +127,7 @@ contains
     real (kind=real_kind) :: vartmp(np,np,nlev)
     real (kind=real_kind),allocatable :: var3d(:,:)
 
-
-#ifdef _MPI
     integer :: ierr
-#endif
 
     num_agg = 1
     call PIO_setDebugLevel(0)

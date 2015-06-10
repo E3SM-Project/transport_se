@@ -11,7 +11,6 @@ module restart_io_mod
    use dimensions_mod, only : nelem, ne, np, nlev, nelemd
    !------------------
    use perf_mod, only : t_startf, t_stopf ! _EXTERNAL
-#ifdef _MPI
    use parallel_mod, only : iam, mpiinteger_t, mpireal_t, mpi_status_size, &
       mpi_success, mpi_max, syncmp, haltmp, &
       MPIinteger_t,parallel_t, &
@@ -20,9 +19,6 @@ module restart_io_mod
 #ifdef _PRESTART
    use parallel_mod, only :  mpi_offset_kind, mpi_address_kind, mpi_mode_wronly,&
       mpi_mode_create, mpi_info_null, mpi_mode_rdonly, mpi_order_fortran
-#endif
-#else
-   use parallel_mod, only : iam, mpiinteger_t, mpireal_t,parallel_t,haltmp
 #endif
    !------------------
    use time_mod, only : timelevel_t, nendstep, nmax
@@ -37,10 +33,6 @@ module restart_io_mod
 
 ! these should be accessed through parallel_mod, above:
 ! intel fortran will complain if they appear in both places
-!#ifdef _MPI
-!#include <mpif.h> ! _EXTERNAL
-!#endif
-
 
    private 
 
@@ -246,14 +238,14 @@ endif
        open(unit=56,file=File%fname,status='UNKNOWN',form='UNFORMATTED', &
 	     recl=recl,ACCESS='DIRECT')
      endif
-#ifdef _MPI
+
      call syncmp(File%par)
      if (iam /= 1) then 
        open(unit=56,file=File%fname,status='OLD',form='UNFORMATTED', &
              recl=recl,ACCESS='DIRECT')
 
      endif   
-#endif
+
      do ie=1,nelemd
 #ifdef _PREDICT
        ig = Schedule(iam)%Local2Global(ie)
@@ -604,10 +596,9 @@ endif
        read(57,rec=1) Header 
        close(57)
     endif
-#ifdef _MPI
+
     call MPI_bcast(Header,RESTART_HDR_CNT,MPIinteger_t,File%par%root,File%par%comm,ierr)
-#endif
-    
+
 #endif
 
     TimeLevel = Header%TimeLevel

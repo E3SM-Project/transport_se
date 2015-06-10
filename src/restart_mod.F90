@@ -34,11 +34,7 @@ private
    integer                         :: errorcode,errorlen,ierr
    character(len=80)               :: errorstring
 #if 0
-#ifdef _MPI
    integer(kind=MPI_OFFSET_KIND)   :: offset,nbytes
-#else
-   integer(kind=int_kind)          :: offset,nbytes
-#endif
 #endif
    ! ====================================================
    !  Routines for Restart files

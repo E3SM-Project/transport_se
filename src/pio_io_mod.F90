@@ -7,15 +7,11 @@ module pio_io_mod
   use pio ! _EXTERNAL
   use pio_types ! _EXTERNAL
   use pio_kinds, only: nfsizekind=>PIO_OffSet ! _EXTERNAL
-#ifdef _MPI
+
   !HOMME Specific:  abortmp, mpireal_t, mpiinteger_t
   use parallel_mod, only : abortmp,  mpi_info_null, mpireal_t,  mpiinteger_t, &
        mpi_integer, mpi_sum
-#else
-  !HOMME Specific: abortmp, mpireal_t,mpiinteger_t
-  use parallel_mod, only : abortmp, mpireal_t, mpiinteger_t
-!  use kinds, only : nfsizekind=>int_kind
-#endif
+
   use common_io_mod, only : varname_len, output_start_time, output_end_time, &
        output_frequency, max_output_streams, output_varnames1, output_varnames2, &
        output_varnames3, output_varnames4, output_varnames5, max_output_streams, &

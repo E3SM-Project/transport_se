@@ -21,12 +21,9 @@ contains
     use edge_mod, only : Edgebuffer_t
     use schedtype_mod, only : schedule_t, cycle_t, schedule
     use thread_mod, only : omp_in_parallel, omp_get_thread_num
-#ifdef _MPI
     use parallel_mod, only : parallel_t, abortmp, status, srequest, rrequest, &
          mpireal_t, mpiinteger_t, mpi_success
-#else
-    use parallel_mod, only : parallel_t, abortmp
-#endif
+
     type (parallel_t)              :: par
     type (EdgeBuffer_t)            :: buffer
 
@@ -43,7 +40,6 @@ contains
 
     integer        :: i
 
-#ifdef _MPI
     if(omp_get_thread_num() > 0) then
        print *,'bndry_exchangeV: Warning you are calling a non-thread safe'
        print *,'		 routine inside a threaded region....     '
@@ -134,8 +130,6 @@ contains
        enddo
     end do   ! icycle
 
-#endif
-
   end subroutine bndry_exchangeV_nonth
 
   subroutine long_bndry_exchangeV_nonth(par,buffer)
@@ -143,12 +137,9 @@ contains
     use edge_mod, only : LongEdgebuffer_t
     use schedtype_mod, only : schedule_t, cycle_t, schedule
     use thread_mod, only : omp_in_parallel
-#ifdef _MPI
     use parallel_mod, only : parallel_t, abortmp, status, srequest, rrequest, &
          mpireal_t, mpiinteger_t, mpi_success
-#else
-    use parallel_mod, only : parallel_t, abortmp
-#endif
+
     type (parallel_t)              :: par
     type (LongEdgeBuffer_t)            :: buffer
 
@@ -165,13 +156,11 @@ contains
 
     integer        :: i
 
-#ifdef _MPI
     if(omp_in_parallel()) then
        print *,'bndry_exchangeV: Warning you are calling a non-thread safe'
        print *,'		 routine inside a threaded region....     '
        print *,'                Results are not predictable!!            '
     endif
-
 
     ! Setup the pointer to proper Schedule
 #ifdef _PREDICT
@@ -238,8 +227,6 @@ contains
           buffer%buf(1:nlyr,iptr+i) = buffer%receive(1:nlyr,iptr+i)
        enddo
     end do   ! icycle
-
-#endif
 
   end subroutine long_bndry_exchangeV_nonth
 

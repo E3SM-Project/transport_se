@@ -2175,11 +2175,7 @@ contains
   function cube_assemble(gbl,fld,elem,par,nelemd,nelem,ielem) result(ierr)
     use element_mod, only : element_t
 
-#ifdef _MPI
     use parallel_mod, only : parallel_t, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_STATUS_SIZE, MPI_REAL8,MPI_TAG
-#else
-    use parallel_mod, only : parallel_t
-#endif
     real (kind=real_kind) :: gbl(:,:,:,:)    ! global output field 
     real (kind=real_kind) :: fld(:,:,:)      ! local model field  
     type (element_t)      :: elem            ! element to assemble 
