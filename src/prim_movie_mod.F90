@@ -7,7 +7,7 @@ module prim_movie_mod
   ! ---------------------
   use kinds, only : real_kind, longdouble_kind
   ! ---------------------
-  use dimensions_mod, only :  nlev, nelem, nelemd, np, ne, nelemdmax, GlobalUniqueCols, nlevp, qsize, ntrac, nc
+  use dimensions_mod, only :  nlev, nelem, nelemd, np, ne, nelemdmax, GlobalUniqueCols, nlevp, qsize, nc
   ! ---------------------
   use hybvcoord_mod, only :  hvcoord_t 
   ! ---------------------
@@ -109,7 +109,6 @@ contains
     type (hvcoord_t), intent(in) :: hvcoord
     type(timelevel_t) :: tl
     ! Local variables
-    type (fvm_struct) :: fvm_tmp
     type (hybrid_t) :: hybrid
     real (kind=real_kind),allocatable, dimension(:) :: latp,lonp
     integer :: ie, v1(4), i, ios, istartP
@@ -430,15 +429,13 @@ contains
     end if
  end function nextoutputstep
 
-  subroutine prim_movie_output(elem, tl, hvcoord, hybrid, nets,nete, fvm)
+  subroutine prim_movie_output(elem, tl, hvcoord, hybrid, nets,nete)
     use piolib_mod, only : Pio_SetDebugLevel !_EXTERNAL
     use perf_mod, only : t_startf, t_stopf !_EXTERNAL
     use viscosity_mod, only : compute_zeta_C0
     use netcdf_io_mod, only : iodesc3d_nc
 
     type (element_t)    :: elem(:)
-
-    type (fvm_struct), optional   :: fvm(:)
 
     type (TimeLevel_t)  :: tl
     type (hvcoord_t)    :: hvcoord
