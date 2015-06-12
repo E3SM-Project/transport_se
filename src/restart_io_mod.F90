@@ -16,10 +16,8 @@ module restart_io_mod
       MPIinteger_t,parallel_t, &
       MPI_BYTE, abortmp
    use parallel_mod, only : abortmp
-#ifdef _PRESTART
    use parallel_mod, only :  mpi_offset_kind, mpi_address_kind, mpi_mode_wronly,&
       mpi_mode_create, mpi_info_null, mpi_mode_rdonly, mpi_order_fortran
-#endif
    !------------------
    use time_mod, only : timelevel_t, nendstep, nmax
    !------------------
@@ -105,9 +103,7 @@ module restart_io_mod
    public :: AddStateField
    public :: CreateStateDescriptor,PrintStateDescriptor
    public :: ConstructElementFile
-#if defined(_MPI) && defined(_PRESTART)
    public :: PrintTypeInfo
-#endif
 
    type (RestartBuffer_t),allocatable,target,public   :: RestartBuffer(:)
 
@@ -117,13 +113,8 @@ module restart_io_mod
    !  Some variables used by all MPI routines
    ! =========================================
 
-#if defined(_MPI) && defined(_PRESTART)
    integer(kind=MPI_OFFSET_KIND)   :: offset,nbytes
    integer :: STATUS(MPI_STATUS_SIZE)
-#else
-   integer(kind=int_kind)          :: offset,nbytes
-#endif
-
    type (File_elem_t),public          :: RestFile
 
    ! ====================================================
@@ -147,18 +138,14 @@ contains
      !==================
      integer           :: ie, ig
      integer           :: amode, info
-#if defined(_MPI) && defined(_PRESTART)
-
      integer (kind=int_kind)	:: type_ablock, type_fview
      integer                    :: array_disp(nelemd)
      integer                    :: array_blen(nelemd)
      integer                    :: isiz
      integer*4			:: acount
      integer(kind=MPI_OFFSET_KIND) :: disp, iext,lb
-#endif
      call t_startf('WriteState')
 
-#if defined(_MPI) && defined(_PRESTART)
 if (COLLECTIVE_IO_WRITE) then
      call mpi_type_contiguous( recl, MPI_BYTE, type_ablock, ierr )
      call mpi_type_commit( type_ablock, ierr )
@@ -233,33 +220,6 @@ else
 endif
 
      call CloseFile(File%fh)
-#else
-     if(iam == 1 ) then
-       open(unit=56,file=File%fname,status='UNKNOWN',form='UNFORMATTED', &
-	     recl=recl,ACCESS='DIRECT')
-     endif
-
-     call syncmp(File%par)
-     if (iam /= 1) then 
-       open(unit=56,file=File%fname,status='OLD',form='UNFORMATTED', &
-             recl=recl,ACCESS='DIRECT')
-
-     endif   
-
-     do ie=1,nelemd
-#ifdef _PREDICT
-       ig = Schedule(iam)%Local2Global(ie)
-#else
-       ig = Schedule(1)%Local2Global(ie)
-#endif
-!	print *, __FILE__,__LINE__,ie,ig,sizeof(variable(ie))
-
-
-	  write(56,rec=ig) variable(ie)%buffer
-
-     enddo
-     close(56)
-#endif
      call t_stopf('WriteState')
 
    end subroutine WriteState
@@ -279,17 +239,14 @@ endif
      !==================
      integer           :: ie, ig, info, amode
 
-#if defined(_MPI) && defined(_PRESTART)
      integer (kind=int_kind)    :: type_ablock, type_fview
      integer                    :: array_disp(nelemd)
      integer                    :: array_blen(nelemd)
      integer*4                  :: acount, isiz
      integer (kind=mpi_offset_kind) :: disp, iext,lb
-#endif
 
      call t_startf('ReadState')
 
-#if defined(_MPI) && defined(_PRESTART)
 if ( COLLECTIVE_IO_READ ) then
      call mpi_type_contiguous( recl, MPI_BYTE, type_ablock, ierr )
      call mpi_type_commit( type_ablock, ierr )
@@ -361,21 +318,7 @@ else
      enddo
 endif
      call CloseFile(File%fh)
-#else
-     open(unit=56,file=File%fname,status='OLD',form='UNFORMATTED', &
-	     recl=recl,ACCESS='DIRECT')
-     do ie=1,nelemd
-#ifdef _PREDICT
-       ig = Schedule(iam)%Local2Global(ie)
-#else
-       ig = Schedule(1)%Local2Global(ie)
-#endif
 
-           read(56,rec=ig) variable(ie)%buffer
-
-     enddo
-     close(56)
-#endif
      call t_stopf('ReadState')
 
    end subroutine ReadState
@@ -405,14 +348,7 @@ endif
 ! The intrinsic sizeof is not (yet) a part of the F90 standard.  The code is left as 
 ! documentation of the hardcoded value RESTART_HDR_CNT.
 ! 
-! only used by old, serial restart code
-#ifndef _PRESTART
-#ifdef _AIX
-    if(RESTART_HDR_CNT*int_kind .ne. sizeof(header)) then
-	call haltmp('bad restart header size')
-    endif
-#endif
-#endif
+
     header%size       = RESTART_HDR_CNT*int_kind
 
    end subroutine CreateRestartHeader
@@ -474,7 +410,6 @@ endif
      ! =============================================
      offset = 0
 
-#if defined(_MPI) && defined(_PRESTART)
      amode = IOR(MPI_MODE_WRONLY,MPI_MODE_CREATE)
      info  = MPI_INFO_NULL
      call MPI_file_open(File%par%comm,headername,amode,info,File%fh,ierr)
@@ -509,15 +444,6 @@ endif
      endif
      call syncmp(File%par)
      call CloseFile(File%fh)
-#else
-    if(iam.eq.1) then
-      open(unit=57,file=headername,status='NEW',form='UNFORMATTED', &
-	     recl=(int_kind*RESTART_HDR_CNT),ACCESS='DIRECT')
-
-      write(unit=57,rec=1) Header
-      close(57)
-    endif
-#endif
 
    end subroutine WriteRestartHeader
 !=============================================================================================
@@ -534,8 +460,7 @@ endif
 
      headername = trim(File%fname)//'.hdr'
 
-#if defined(_MPI) && defined(_PRESTART)
-     amode = MPI_MODE_RDONLY     
+     amode = MPI_MODE_RDONLY
      info  = MPI_INFO_NULL
      call MPI_file_open(File%par%comm,headername,amode,info,File%fh,ierr)
      if(ierr .ne. MPI_SUCCESS) then
@@ -588,18 +513,6 @@ endif
 !        print *,'ReadRestartHeader: After MPI_file_set_view: ',errorstring(1:errorlen)
 !     endif
      call CloseFile(File%fh)
-#else
-    if(iam.eq.1) then
-       open(unit=57,file=headername,status='OLD',form='UNFORMATTED', &
-	     recl=(int_kind*RESTART_HDR_CNT),ACCESS='DIRECT')
-
-       read(57,rec=1) Header 
-       close(57)
-    endif
-
-    call MPI_bcast(Header,RESTART_HDR_CNT,MPIinteger_t,File%par%root,File%par%comm,ierr)
-
-#endif
 
     TimeLevel = Header%TimeLevel
     nEndStep = nmax + TimeLevel%nstep
@@ -683,16 +596,12 @@ endif
 
    integer,intent(in)   :: fh
 
-#if defined(_MPI) && defined(_PRESTART)
      call MPI_file_close(fh,ierr)
      if(ierr .ne. MPI_SUCCESS) then
        errorcode=ierr
        call MPI_Error_String(errorcode,errorstring,errorlen,ierr)
        print *,'CloseFile: error with MPI_file_close: ',errorstring(1:errorlen)
      endif
-#else
-     close(unit=fh)
-#endif
 
    end subroutine CloseFile
 ! =========================================================
@@ -717,8 +626,6 @@ endif
     integer(kind=MPI_ADDRESS_KIND),allocatable          :: elem_disp(:)
     integer (kind=int_kind)      :: ie,ig
  
-
-#if defined(_MPI) && defined(_PRESTART)
     if (collective_io_read .or. collective_io_write ) then
        ! we need to setup collective MPI IO structs and data types
     else
@@ -841,7 +748,6 @@ endif
     deallocate(elem_disp)
     deallocate(elem_buftype)
     deallocate(elem_filetype)
-#endif
 
    end subroutine ConstructElementFile
 
@@ -875,7 +781,7 @@ endif
 
  
     end subroutine AddStateField
-#if defined(_MPI) && defined(_PRESTART)
+
 !=========================================================================
 !  PrintTypeInfo:
 !    Prints out information about an MPI datatype 
@@ -908,7 +814,7 @@ endif
     endif
 
   end subroutine PrintTypeInfo
-#endif
+
 !=========================================================================
 !  PrintStateDescriptor
 !     Prints out the state descriptor

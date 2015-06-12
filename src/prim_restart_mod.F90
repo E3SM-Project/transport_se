@@ -100,10 +100,9 @@ contains
     len = SIZE(state%dp3d)
     call AddStateField(RestDesc,len,type)
 
-#if defined(_MPI) && defined(_PRESTART)
     if(Debug) call PrintStateDescriptor(RestDesc)
     call ConstructElementFile(RestDesc,File,ierr)
-#endif
+
     nwordsRestartBuffer_t=RestDesc%nwords
 
     end subroutine initRestartFile

@@ -3,12 +3,6 @@
 /* Energy Diagnostics */
 #cmakedefine ENERGY_DIAGNOSTICS
 
-/* WK_GRAD */
-#define _WK_GRAD 1
-
-/* _PRESTART */
-#define _PRESTART 1
-
 /* Number of cells NC*NC in each element (Default value NC=4) */
 #define NC @NUM_CELLS@
 

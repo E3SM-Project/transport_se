@@ -2197,14 +2197,12 @@ contains
     integer :: nface      ! number of faces (must be 6)
     integer :: nlyr       ! number of layers
 
-#if defined(_MPI)
     integer :: ectr       ! global element counter
     integer tag
     integer :: count      ! w/o "::", triggers PGI 3.1 F90 bug 
     integer pe
     integer status(MPI_STATUS_SIZE)
     integer mpi_err
-#endif      
 
     call abortmp('Because convert_gbl_index is not used cube_assemble is broken. ')
     ne1   = SIZE(fld,1)
@@ -2260,7 +2258,6 @@ contains
           end do
        end if
 
-#if defined(_MPI)
        if (ielem==nelemd) then
           ectr=nelemd
           do while(ectr<nelem)
@@ -2307,7 +2304,6 @@ contains
             tag,           &
             par%comm,      &
             mpi_err)
-#endif
     end if
 
   end function cube_assemble
