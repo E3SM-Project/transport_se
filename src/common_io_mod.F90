@@ -4,11 +4,8 @@
 
 module common_io_mod
   use control_mod, only : MAX_STRING_LEN         !HOMME Specific: MAX_STRING_LEN
-#if defined( PIO ) || defined ( PIO_INTERP )
   use pio, only : var_desc_t, file_desc_t, io_desc_t, nfsizekind=>PIO_OffSet, iosystem_desc_t, & ! _EXTERNAL
        nf_double=>pio_double, nf_int=>pio_int, unlim_dim=>pio_unlimited, nf_noerr=>pio_noerr
-#endif
-
 
   implicit none
   private
@@ -18,16 +15,10 @@ module common_io_mod
   integer, parameter, public :: max_output_streams=5
   integer, parameter, public :: max_output_variables=50
   integer, parameter, public :: varname_len=16
-  ! output analysis namelists, 
-
 
   integer, parameter, public :: MAX_INFILES=120
-!  integer, parameter, public :: MAX_VECVARS=10
-  
+
   character(len=160), public, target :: infilenames(MAX_INFILES)
-!  character(len=10), public :: vector_uvars(MAX_VECVARS), vector_vvars(MAX_VECVARS)
-
-
 
   integer, public :: output_timeunits(max_output_streams) 
   !  0=steps, 1=pday, 2=phour
@@ -56,8 +47,6 @@ module common_io_mod
   public :: nf_addrequiredvar
   public :: nf_dim, nf_variable, nf_handle, nf_int, nf_double
   public :: unlim_dim
-
-
 
 
   integer, parameter, public :: beginstate=1, dimsstate=2,varsstate=3,readystate=4 
@@ -107,9 +96,6 @@ module common_io_mod
 
 
 contains
-
-
-
 
   !
   !  Returns a pointer to the list of variables to be written to file ios

@@ -31,6 +31,7 @@ echo "WORK=$WORK"
 
 #_______________________________________________________________________
 # check for some common errors
+
 @ err=0
 
 if ($cwd == $REPO) then
@@ -64,9 +65,6 @@ set EXE       = $BLD_DIR/src/preqx/preqx          # location of executable
 #     -DCMAKE_BUILD_TYPE=Debug \
 #     -DCMAKE_Fortran_FLAGS_DEBUG="-g -O0 -fbounds-check" \
 #
-#   for native-grid (non-interpolated) output use:
-#     -DPREQX_USE_PIO=TRUE \
-#
 
 mkdir -p $BLD_DIR
 mkdir -p $RUN_DIR
@@ -83,7 +81,6 @@ else
    -DQSIZE_D=$QSIZE             \
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
-   -DPREQX_USE_PIO=FALSE        \
    -DENABLE_OPENMP=TRUE         \
    $REPO
 
@@ -92,7 +89,6 @@ endif
 
 #_______________________________________________________________________
 # build
-#
 
 echo "compiling the transport_se executable"
 make -j8 preqx

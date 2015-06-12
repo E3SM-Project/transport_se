@@ -21,12 +21,7 @@ program prim_main
   use thread_mod,       only: nthreads, vert_num_threads, omp_get_thread_num, &
                               omp_set_num_threads, omp_get_nested, &
                               omp_get_num_threads, omp_get_max_threads
-#ifdef PIO_INTERP
-  use interp_movie_mod,       only : interp_movie_output, interp_movie_finish, interp_movie_init
-  use interpolate_driver_mod, only : interpolate_driver
-#else
-  use prim_movie_mod,   only : prim_movie_output, prim_movie_finish,prim_movie_init
-#endif
+  use prim_movie_mod,   only: prim_movie_output, prim_movie_finish,prim_movie_init
 
   implicit none
 
@@ -99,7 +94,7 @@ program prim_main
      call haltmp("error in hvcoord_init")
   end if
 
-  ! Initialize: derivatives, restart runs, test_cases, and filters (prim_init2)
+  ! Initialize derivatives, restart runs, test_cases, and filters (prim_init2)
 
   if(par%masterproc) print *,"Primitive Equation Initialization..."
 #if (defined HORIZ_OPENMP)
@@ -132,22 +127,11 @@ program prim_main
      end if
   endif
   
-  ! Initialize history files
-
-#ifdef PIO_INTERP
-  call interp_movie_init( elem, hybrid, 1, nelemd, hvcoord, tl )
-#else
-  call prim_movie_init( elem, par, hvcoord, tl )
-#endif
-
   ! Write initial state for new runs
 
+  call prim_movie_init( elem, par, hvcoord, tl )
   if (runtype == 0 ) then
-#ifdef PIO_INTERP
-     call interp_movie_output(elem, tl, hybrid, 0d0, 1, nelemd, hvcoord=hvcoord)
-#else
      call prim_movie_output(elem, tl, hvcoord, hybrid, 1,nelemd)
-#endif
   endif
 
   ! Perform main timestepping Loop
@@ -179,13 +163,9 @@ program prim_main
 
      ithr   = omp_get_thread_num()
      hybrid = hybrid_create(par,ithr,1)
-#ifdef PIO_INTERP
-     call interp_movie_output(elem, tl, hybrid, 0d0, 1, nelemd, hvcoord=hvcoord)
-#else
      call prim_movie_output(elem, tl, hvcoord, hybrid, 1,nelemd)
-#endif
 
-     ! Write restart files if needed
+     ! Write restart file if needed
 
       if((restartfreq > 0) .and. (MODULO(tl%nstep,restartfreq) ==0)) then
         call WriteRestart(elem, ithr,1,nelemd,tl)
@@ -196,11 +176,8 @@ program prim_main
 
   if(par%masterproc) print *,"Finished main timestepping loop",tl%nstep
   if(par%masterproc) print *,"closing history files"
-#ifdef PIO_INTERP
-  call interp_movie_finish
-#else
+
   call prim_movie_finish
-#endif
 
   ! Stop performance timers and write timing data
 

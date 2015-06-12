@@ -9,9 +9,6 @@
 /* _PRESTART */
 #define _PRESTART 1
 
-/* PIO with interpolation */
-#cmakedefine PIO_INTERP
-
 /* Number of cells NC*NC in each element (Default value NC=4) */
 #define NC @NUM_CELLS@
 
@@ -23,9 +20,6 @@
 
 /* Number of tracers (Default value 4 if not specified) */
 #cmakedefine QSIZE_D @QSIZE_D@
-
-/* Basic PIO */
-#cmakedefine PIO
 
 /* Whether to use CUDA Fortran */
 #cmakedefine01 USE_CUDA_FORTRAN

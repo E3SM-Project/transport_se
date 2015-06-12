@@ -45,12 +45,10 @@
   vfile_int         = "vcoord/12k_top-64i.ascii"
 /
 &analysis_nl
- interp_gridtype  = 1
  output_dir       = "./movies/"                   ! destination dir for netcdf file
  output_timeunits = 2,                            ! 1=days, 2=hours, 0=timesteps
  output_frequency = 12,                           ! interval between outputs
  output_varnames1 = 'Q2','geo'                    ! variables to write to file
- interp_type      = 0                             ! 0=native grid, 1=bilinear
  output_type      ='netcdf'                       ! netcdf or pnetcdf
  io_stride        = 8
 /

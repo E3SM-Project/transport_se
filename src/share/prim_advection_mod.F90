@@ -435,7 +435,6 @@ contains
   subroutine Prim_Advec_Init1(par, n_domains)
     use dimensions_mod, only : nlev, qsize, nelemd
     use parallel_mod, only : parallel_t
-    use interpolate_mod,        only : interpolate_tracers_init
     type(parallel_t) :: par
     integer, intent(in) :: n_domains
 

@@ -30,14 +30,6 @@ macro(createTestExec execName execType macroNP macroNC
   SET(NUM_CELLS ${macroNC})
   SET(NUM_PLEV ${macroPLEV})
 
-  IF (${macroUSE_PIO})
-    SET(PIO TRUE)
-    SET(PIO_INTERP)
-  ELSE ()
-    SET(PIO)
-    SET(PIO_INTERP TRUE)
-  ENDIF ()
-
   IF (${macroWITH_ENERGY})
     SET(ENERGY_DIAGNOSTICS TRUE)
   ELSE() 

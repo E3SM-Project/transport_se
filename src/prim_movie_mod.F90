@@ -3,73 +3,43 @@
 #endif
 
 module prim_movie_mod
-#ifndef PIO_INTERP
-  ! ---------------------
-  use kinds, only : real_kind, longdouble_kind
-  ! ---------------------
-  use dimensions_mod, only :  nlev, nelem, nelemd, np, ne, nelemdmax, GlobalUniqueCols, nlevp, qsize, nc
-  ! ---------------------
-  use hybvcoord_mod, only :  hvcoord_t 
-  ! ---------------------
-  use parallel_mod, only : syncmp, iam, mpireal_t, mpi_max, mpi_sum, mpiinteger_t, parallel_t, haltmp, abortmp
-  ! ---------------------
-  use time_mod, only : Timelevel_t, tstep, ndays, time_at, secpday, nendstep,nmax
-  ! ---------------------
-  use element_mod, only : element_t
-  ! ---------------------
-  use cube_mod, only : cube_assemble
-  ! ---------------------
-!  use prim_state_mod, only : naccum
-  ! ---------------------
-  use control_mod, only : test_case, runtype, accumstart, &
-       accumstop, accumfreq, restartfreq, &
-       integration, hypervis_power
-  ! ---------------------
-  use common_io_mod, only : &
-       output_start_time,   &
-       output_end_time,     &
-       output_frequency,    &
-       output_dir,          &
-       max_output_variables,&
-       max_output_streams,  &
-       varname_len,         &
-       nf_handle,           &
-       get_current_varnames, &
-       nfsizekind,             &
-       nf_selectedvar
-       
-  use surfaces_mod, only : cvlist, InitControlVolumesData, InitControlVolumes
 
-  use netcdf_io_mod, only:  nf_output_init_begin,& 
-       nf_global_attribute, &
-       nf_output_init_complete,  &
-       nf_output_register_variables,&
-       nf_put_var, &
-       nf_close_all, &
-       nf_output_register_dims, &
-       nf_advance_frame, &
-       nf_variable_attributes, &
-       nf_get_frame
+  use kinds,          only: real_kind, longdouble_kind
+  use surfaces_mod,   only: cvlist, InitControlVolumesData, InitControlVolumes
+  use dof_mod,        only: UniquePoints, UniqueCoords, UniqueNcolsP, createmetadata
+  use hybvcoord_mod,  only: hvcoord_t
+  use time_mod,       only: Timelevel_t, tstep, ndays, time_at, secpday, nendstep,nmax
+  use element_mod,    only: element_t
+  use cube_mod,       only: cube_assemble
+  use pio,            only: io_desc_t
+  use hybrid_mod,     only: hybrid_t, hybrid_create
+  use edge_mod,       only: EdgeBuffer_t
+  use parallel_mod,   only: syncmp, iam, mpireal_t, mpi_max, mpi_sum, &
+                            mpiinteger_t, parallel_t, haltmp, abortmp
+  use dimensions_mod, only: nlev, nelem, nelemd, np, ne, nelemdmax, &
+                            GlobalUniqueCols, nlevp, qsize, nc
+  use control_mod,    only: test_case, runtype, accumstart, &
+                            accumstop, accumfreq, restartfreq, &
+                            integration, hypervis_power
 
-  ! ---------------------
-  use coordinate_systems_mod, only : cartesian2D_t, spherical_polar_t, cartesian3D_t, spherical_to_cart
-  ! ---------------------
-  use physical_constants, only : g, kappa, p0, dd_pi
-  ! ---------------------
-  use dof_mod, only : UniquePoints, UniqueCoords, UniqueNcolsP, createmetadata
-  ! ---------------------
-  use pio, only  : io_desc_t !_EXTERNAL
-
-
-    use hybrid_mod, only : hybrid_t, hybrid_create
-    use edge_mod, only : EdgeBuffer_t
-
-    use common_movie_mod, only: varrequired, vartype, varnames, varcnt, vardims, &
-	dimnames, maxdims
+  use common_io_mod,  only: output_start_time, output_end_time, output_frequency,&
+                            output_dir, max_output_variables, max_output_streams,  &
+                            varname_len, nf_handle, get_current_varnames,nfsizekind,&
+                            nf_selectedvar
+  use netcdf_io_mod,  only: nf_output_init_begin,nf_global_attribute, &
+                            nf_output_init_complete, nf_output_register_variables,&
+                            nf_put_var, nf_close_all, nf_output_register_dims,&
+                            nf_advance_frame, nf_variable_attributes, nf_get_frame
+  use common_movie_mod, only: varrequired, vartype, varnames, varcnt, &
+                            vardims, dimnames, maxdims
+  use physical_constants, only: g, kappa, p0, dd_pi
+  use coordinate_systems_mod, only: cartesian2D_t, spherical_polar_t, &
+                            cartesian3D_t, spherical_to_cart
 
   implicit none
   private
   save
+
   public :: prim_movie_output, prim_movie_init, &
        prim_movie_finish,  nextoutputstep
 
@@ -668,6 +638,5 @@ contains
     call t_stopf('prim_movie_output:pio')
  end subroutine prim_movie_output
 
-#endif
 end module prim_movie_mod
 

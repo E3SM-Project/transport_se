@@ -40,15 +40,13 @@ SET(PREQX_SRCS_F90
   ${SRC_SHARE_DIR}/viscosity_mod.F90
   ${SRC_SHARE_DIR}/spacecurve_mod.F90
   ${SRC_SHARE_DIR}/cube_mod.F90
-  ${SRC_SHARE_DIR}/interpolate_mod.F90
   ${SRC_SHARE_DIR}/dof_mod.F90
   ${SRC_DIR}/common_io_mod.F90
   ${SRC_DIR}/pio_io_mod.F90 
   ${SRC_DIR}/repro_sum_mod.F90 
   ${SRC_SHARE_DIR}/time_mod.F90
   ${SRC_SHARE_DIR}/hybvcoord_mod.F90
-  ${SRC_DIR}/interp_movie_mod.F90 
-  ${UTILS_SHARE_DIR}/shr_kind_mod.F90 
+  ${UTILS_SHARE_DIR}/shr_kind_mod.F90
   ${UTILS_SHARE_DIR}/shr_mpi_mod.F90 
   ${UTILS_SHARE_DIR}/shr_sys_mod.F90 
   ${UTILS_SHARE_DIR}/shr_file_mod.F90 
@@ -76,7 +74,6 @@ SET(PREQX_SRCS_F90
   ${SRC_DIR}/vertical_mod.F90 
   ${SRC_DIR}/prim_movie_mod.F90
   ${SRC_DIR}/surfaces_mod.F90 
-  ${SRC_DIR}/interpolate_driver_mod.F90 
   ${SRC_DIR}/netcdf_io_mod.F90 
   ${SRC_SHARE_DIR}/mesh_mod.F90 
   ${SRC_DIR}/prim_main.F90 

@@ -100,8 +100,6 @@ module namelist_mod
        partitionfornodes, useframes, mpireal_t, mpilogical_t, mpiinteger_t, mpichar_t
   !-----------------
 
-  use interpolate_mod, only : vector_uvars, vector_vvars, max_vecvars, interpolate_analysis, replace_vec_by_vordiv
-
   use common_io_mod, only : &
        output_prefix,       &
        output_type,         &
@@ -127,8 +125,6 @@ module namelist_mod
 
   use common_movie_mod, only : setvarnames
 
-  use interpolate_mod, only : set_interp_parameter, get_interp_parameter
-
   implicit none
   private
 !
@@ -150,7 +146,6 @@ module namelist_mod
     character(len=MAX_FILE_LEN) :: mesh_file
     integer :: se_ftype, se_limiter_option
     integer :: se_phys_tscale, se_nsplit
-    integer :: interp_nlat, interp_nlon, interp_gridtype, interp_type
     integer :: i, ii, j
     integer  :: ierr
     character(len=80) :: errstr, arg
@@ -261,21 +256,11 @@ module namelist_mod
          io_stride,           &
          num_io_procs,        &
          infilenames,         &
-         replace_vec_by_vordiv, &
-         vector_uvars,        &
-         vector_vvars,        &
          output_varnames1,    &
          output_varnames2,    &
          output_varnames3,    &
          output_varnames4,    &
          output_varnames5
-
-     namelist /analysis_nl/    &
-        interp_nlat,          &
-        interp_nlon,          &
-        interp_gridtype,      &
-        interp_type,          &
-        interpolate_analysis
 
     ! ==========================
     ! Set the default partmethod
@@ -409,25 +394,6 @@ module namelist_mod
 
        end if
 
-!      Default interpolation grid  (0 = auto compute based on ne,nv)  interpolation is off by default
-#ifdef PIO_INTERP
-       interpolate_analysis=.true.
-#else
-       interpolate_analysis=.false.
-#endif
-       interp_nlat =  0
-       interp_nlon = 0
-       interp_gridtype = 2
-       interp_type = 0
-       replace_vec_by_vordiv(:)=.false.
-       vector_uvars(:)=''
-       vector_vvars(:)=''
-       vector_uvars(1:12) = (/ &
-            'U         ','UBOT      ','U200      ','U250      ','U850      ','FU        ',&
-            'CONVU     ','DIFFU     ','UTGWORO   ','UFLX      ','MET_U     ','MET_U_tend' /)
-       vector_vvars(1:12) = (/ &
-            'V         ','VBOT      ','V200      ','V250      ','V850      ','FV        ',&
-            'CONVV     ','DIFFV     ','VTGWORO   ','VFLX      ','MET_V     ','MET_V_tend' /)
        infilenames(:) = ''
        output_prefix = ""
        output_start_time=0
@@ -729,30 +695,6 @@ call MPI_bcast(smooth    ,1,MPIreal_t   ,par%root,par%comm,ierr)
           call abortmp('prescribed_wind should be either 0 or 1')
     endif
 
-    call MPI_bcast(interpolate_analysis, 7,MPIlogical_t,par%root,par%comm,ierr)
-    call MPI_bcast(interp_nlat , 1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(interp_nlon , 1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(interp_gridtype , 1,MPIinteger_t,par%root,par%comm,ierr)
-    call MPI_bcast(interp_type , 1,MPIinteger_t,par%root,par%comm,ierr)
-
-    call MPI_bcast(replace_vec_by_vordiv ,MAX_VECVARS ,MPIlogical_t,par%root,par%comm,ierr)
-    call MPI_bcast(vector_uvars ,10*MAX_VECVARS ,MPIChar_t,par%root,par%comm,ierr)
-    call MPI_bcast(vector_vvars ,10*MAX_VECVARS ,MPIChar_t,par%root,par%comm,ierr)
-
-    call set_interp_parameter('gridtype',interp_gridtype)
-    call set_interp_parameter("itype",interp_type)
-    if(any(interpolate_analysis)) then
-       if (interp_nlon==0 .or. interp_nlat==0) then
-          ! compute interpolation grid based on number of points around equator
-          call set_interp_parameter('auto',4*ne*(np-1))
-          interp_nlat = get_interp_parameter('nlat')
-          interp_nlon = get_interp_parameter('nlon')
-       else
-          call set_interp_parameter('nlat',interp_nlat)
-          call set_interp_parameter('nlon',interp_nlon)
-       endif
-    endif
-
     ! some default diffusion coefficiets
     if(nu_s<0) nu_s=nu
     if(nu_q<0) nu_q=nu
@@ -909,13 +851,6 @@ call MPI_bcast(smooth    ,1,MPIreal_t   ,par%root,par%comm,ierr)
          write(iulog, *) 'Eulerian tracer advection on GLL grid'
         end select
 
-       write(iulog,*)" analysis interpolation = ", interpolate_analysis
-       if(any(interpolate_analysis)) then
-          write(iulog,*)" analysis interp nlat = ",interp_nlat
-          write(iulog,*)" analysis interp nlon = ",interp_nlon
-          write(iulog,*)" analysis interp gridtype = ",interp_gridtype
-          write(iulog,*)" analysis interpolation type = ",interp_type
-       end if
     endif
 
   end subroutine readnl

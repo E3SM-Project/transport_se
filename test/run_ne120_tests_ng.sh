@@ -1,6 +1,7 @@
 #!/bin/tcsh
 #
-#PBS -l walltime=0:25:00
+#PBS -q low
+#PBS -l walltime=1:00:00
 #PBS -l mppwidth=1920
 #PBS -j oe
 #PBS -o out_ne120_$PBS_JOBID

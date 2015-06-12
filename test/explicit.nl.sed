@@ -50,7 +50,6 @@ vfile_mid     = "vcoord/sabm-64.ascii"
 vfile_int     = "vcoord/sabi-64.ascii"
 /
 &analysis_nl
- interp_gridtype=1
 ! every 6h
  output_timeunits=2
  output_frequency=24

@@ -52,14 +52,10 @@ else
   # -DCMAKE_BUILD_TYPE=Debug \
   # -DCMAKE_Fortran_FLAGS_DEBUG="-g -O0 -fbounds-check" \
 
-  # For interpolated output: -DPREQX_USE_PIO=FALSE      \
-  # For native grid output:  -DPREQX_USE_PIO=TRUE       \
-
   cmake -C $MACH                \
    -DQSIZE_D=$QSIZE             \
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
-   -DPREQX_USE_PIO=FALSE        \
    $REPO
 
   make -j4 clean
