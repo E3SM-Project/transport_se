@@ -70,7 +70,6 @@ SET(PREQX_SRCS_F90
   ${SRC_SHARE_DIR}/prim_advection_mod.F90
   ${SRC_SHARE_DIR}/metis_mod.F90
   ${SRC_SHARE_DIR}/prim_driver_mod.F90
-  ${SRC_DIR}/vertical_mod.F90 
   ${SRC_DIR}/prim_movie_mod.F90
   ${SRC_DIR}/netcdf_io_mod.F90 
   ${SRC_SHARE_DIR}/mesh_mod.F90 

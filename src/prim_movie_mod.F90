@@ -5,7 +5,6 @@
 module prim_movie_mod
 
   use kinds,          only: real_kind, longdouble_kind
-  use surfaces_mod,   only: cvlist, InitControlVolumesData, InitControlVolumes
   use dof_mod,        only: UniquePoints, UniqueCoords, UniqueNcolsP, createmetadata
   use hybvcoord_mod,  only: hvcoord_t
   use time_mod,       only: Timelevel_t, tstep, ndays, time_at, secpday, nendstep,nmax
@@ -89,7 +88,6 @@ contains
     integer, allocatable :: compDOF(:)
     integer, allocatable :: dof(:)
     type(io_desc_t) :: iodescv, iodescvp1
-    integer,allocatable  :: subelement_corners(:,:)
     real(kind=real_kind),allocatable  :: var1(:,:),var2(:,:)
     character(len=varname_len), pointer :: output_varnames(:)
 
@@ -213,10 +211,6 @@ contains
     call nf_variable_attributes(ncdf, 'T', 'Temperature','degrees kelvin')
     call nf_variable_attributes(ncdf, 'lat', 'column latitude','degrees_north')
     call nf_variable_attributes(ncdf, 'lon', 'column longitude','degrees_east')
-    call nf_variable_attributes(ncdf, 'phys_lat', 'column latitude','degrees_north')
-    call nf_variable_attributes(ncdf, 'phys_lon', 'column longitude','degrees_east')
-    call nf_variable_attributes(ncdf, 'phys_cv_lat', 'column control volume latitude','degrees_north')
-    call nf_variable_attributes(ncdf, 'phys_cv_lon', 'column control volume longitude','degrees_east')
     call nf_variable_attributes(ncdf, 'time', 'Model elapsed time','days')
     call nf_variable_attributes(ncdf, 'lev' ,'hybrid level at midpoints' ,'level','positive','down') !,'formula_terms','a: hyam b: hybm p0: P0 ps: PS')
     call nf_variable_attributes(ncdf, 'ilev','hybrid level at interfaces','level','positive','down') !,'formula_terms','a: hyai b: hybi p0: P0 ps: PS')
@@ -226,33 +220,6 @@ contains
     call nf_variable_attributes(ncdf, 'hybi','hybrid B coefficiet at layer interfaces' ,'dimensionless') 
 
     call nf_output_init_complete(ncdf)
-
-
-    do ios=1,max_output_streams
-       output_varnames=>get_current_varnames(ios)
-       if( (nf_selectedvar('cv_lat', output_varnames)) .or.  &
-            (nf_selectedvar('cv_lon', output_varnames)) ) then
-          if (.not. allocated(cvlist)) then
-             if (par%masterproc) print *,'computing GLL dual grid for  control volumes:'
-             call InitControlVolumesData(par,nelemd)
-             ! single thread
-             hybrid = hybrid_create(par,0,1)
-             call InitControlVolumes(elem,hybrid,1,nelemd)
-             if (par%masterproc) print *,'done.'
-          endif
-       endif
-
-       if( (nf_selectedvar('corners', output_varnames))) then
-          if (par%masterproc) print *,'writing subelement metadata'
-          allocate(subelement_corners((np-1)*(np-1)*nelemd,nlev))
-          subelement_corners=0
-          call createmetadata(par, elem, subelement_corners(:,1:4))
-          call nf_put_var(ncdf(ios),subelement_corners,start(1:1),count(1:1),&
-               name='corners',iodescin=iodesc3d_subelem)
-          deallocate(subelement_corners)
-       endif
-    enddo
-
 
 
     do ios=1,max_output_streams
@@ -284,81 +251,7 @@ contains
           call nf_put_var(ncdf(ios),hvcoord%hybi,start(1:1),count(1:1),name='hybi',iodescin=iodescvp1)
           call nf_put_var(ncdf(ios),hvcoord%etai,start(1:1),count(1:1),name='ilev',iodescin=iodescvp1)
 
-
-          ! check if reqested 
-
-
-
-
-          output_varnames=>get_current_varnames(ios)
-          kmax = 0
-          if(nf_selectedvar('cv_lon',output_varnames).or. &
-               nf_selectedvar('cv_lat',output_varnames).or. &
-               nf_selectedvar('faceno',output_varnames)) then
-             kmax2=0
-             do ie=1,nelemd
-                kmax2 = MAX(kmax2,MAXVAL(cvlist(ie)%nvert))
-             enddo
-             kmax = ParallelMax(kmax2,hybrid)
-             if ( nlev < kmax ) call abortmp('cv output requires nlev >= max number of vertex')
-          endif
-          
-          if(nf_selectedvar('cv_lon', output_varnames)) then
-             if (par%masterproc) print *,'writing cv_lon...'
-             allocate(var3d(nxyp,nlev))
-             st=1
-             do ie=1,nelemd
-                en=st+elem(ie)%idxp%NumUniquePts-1
-                vartmp = 0
-                do k=1,kmax
-                   vartmp(:,:,k)=cvlist(ie)%vert_latlon(k,:,:)%lon*180/dd_pi
-                enddo
-                call UniquePoints(elem(ie)%idxp, nlev, vartmp, var3d(st:en,:))
-                st=en+1
-             enddo
-             Call nf_put_var(ncdf(ios),var3d,start, count, name='cv_lon')
-             deallocate(var3d)
-          end if
-          if(nf_selectedvar('cv_lat', output_varnames)) then
-             if (par%masterproc) print *,'writing cv_lat...'
-             allocate(var3d(nxyp,nlev))
-             st=1
-             do ie=1,nelemd
-                en=st+elem(ie)%idxp%NumUniquePts-1
-                vartmp = 0
-                do k=1,kmax
-                   vartmp(:,:,k)=cvlist(ie)%vert_latlon(k,:,:)%lat*180/dd_pi
-                enddo
-                call UniquePoints(elem(ie)%idxp,nlev,vartmp,var3d(st:en,:))
-                st=en+1
-             enddo
-             call nf_put_var(ncdf(ios),var3d,start, count, name='cv_lat')
-             deallocate(var3d)
-          end if
-          if(nf_selectedvar('faceno', output_varnames)) then
-             if (par%masterproc) print *,'writing face_no...'
-             allocate(var3d(nxyp,nlev))
-             ! also output face_no
-             st=1
-             do ie=1,nelemd
-                en=st+elem(ie)%idxp%NumUniquePts-1
-                vartmp = 0
-                do k=1,kmax
-                   vartmp(:,:,k)=cvlist(ie)%face_no(k,:,:)
-                enddo
-                call UniquePoints(elem(ie)%idxp,nlev,vartmp,var3d(st:en,:))
-                st=en+1
-             enddo
-             call nf_put_var(ncdf(ios),var3d,start, count, name='faceno')
-             deallocate(var3d)
-          end if
-
-! #else
-!           if( (nf_selectedvar('phys_lat', output_varnames))) then
-!              if (par%masterproc) print *,'WARNING: compile with -D_FVM to output fvm grid coordinate data'
-!           endif
-! #endif
-          if (par%masterproc) print *,'done writing coordinates ios=',ios
+       if (par%masterproc) print *,'done writing coordinates ios=',ios
        end if
     end do
 
