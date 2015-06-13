@@ -22,6 +22,8 @@ use edge_mod, only : EdgeBuffer_t, edgevpack, edgerotate, edgevunpack, edgevunpa
     edgevunpackmax, initEdgeBuffer, FreeEdgeBuffer
 use bndry_mod, only : bndry_exchangev
 use control_mod, only : hypervis_scaling, nu, nu_div
+use perf_mod, only : t_startf, t_stopf
+
 
 implicit none
 save
@@ -380,65 +382,65 @@ subroutine biharmonic_wk_scalar_minmax(elem,qtens,deriv,edgeq,hybrid,nets,nete,e
 !    note: emin/emax must be initialized with Q element min/max.  
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-type (hybrid_t)      , intent(in) :: hybrid
-type (element_t)     , intent(inout), target :: elem(:)
-integer :: nets,nete
-real (kind=real_kind), dimension(np,np,nlev,qsize,nets:nete) :: qtens
-type (EdgeBuffer_t)  , intent(inout) :: edgeq
-type (derivative_t)  , intent(in) :: deriv
-real (kind=real_kind), intent(out), dimension(nlev,qsize,nets:nete) :: emin,emax
+   type (hybrid_t)      , intent(in) :: hybrid
+   type (element_t)     , intent(inout), target :: elem(:)
+   integer :: nets,nete
+   real (kind=real_kind), dimension(np,np,nlev,qsize,nets:nete) :: qtens
+   type (EdgeBuffer_t)  , intent(inout) :: edgeq
+   type (derivative_t)  , intent(in) :: deriv
+   real (kind=real_kind), intent(out), dimension(nlev,qsize,nets:nete) :: emin,emax
 
-! local
-integer :: k,kptr,i,j,ie,ic,q
-real (kind=real_kind), dimension(np,np) :: lap_p
-real (kind=real_kind) :: Qmin(np,np,nlev,qsize)
-real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
-logical var_coef1
+   ! local
+   integer :: k,i,j,ie,q,nlrs
+   real (kind=real_kind), dimension(np,np) :: lap_p
+   real (kind=real_kind) :: Qmin(np,np,nlev,qsize)
+   real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
+   logical var_coef1
 
+   call t_startf('biharmonic_wk_scalar_minmax')
    !if tensor hyperviscosity with tensor V is used, then biharmonic operator is (\grad\cdot V\grad) (\grad \cdot \grad) 
    !so tensor is only used on second call to laplace_sphere_wk
    var_coef1 = .true.
    if(hypervis_scaling > 0)    var_coef1 = .false.
-
-
+   nlrs = nlev*qsize
 
    do ie=nets,nete
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
-      do k=1,nlev    !  Potential loop inversion (AAM)
-         Qmin(:,:,k,q)=emin(k,q,ie)  ! need to set all values in element for
-         Qmax(:,:,k,q)=emax(k,q,ie)  ! edgeVpack routine below
-         lap_p(:,:) = qtens(:,:,k,q,ie)
-! Original use of qtens on left and right hand sides caused OpenMP errors (AAM)
-         qtens(:,:,k,q,ie)=laplace_sphere_wk(lap_p,deriv,elem(ie),var_coef=var_coef1)
+      do q=1,qsize
+         do k=1,nlev    !  Potential loop inversion (AAM)
+            Qmin(:,:,k,q)=emin(k,q,ie)  ! need to set all values in element for
+            Qmax(:,:,k,q)=emax(k,q,ie)  ! edgeVpack routine below
+            lap_p(:,:) = qtens(:,:,k,q,ie)
+            ! Original use of qtens on left and right hand sides caused OpenMP errors (AAM)
+            qtens(:,:,k,q,ie)=laplace_sphere_wk(lap_p,deriv,elem(ie),var_coef=var_coef1)
+         enddo
       enddo
-      enddo
-      call edgeVpack(edgeq, qtens(:,:,:,:,ie),qsize*nlev,0,elem(ie)%desc)
-      call edgeVpack(edgeq,Qmin,nlev*qsize,nlev*qsize,elem(ie)%desc)
-      call edgeVpack(edgeq,Qmax,nlev*qsize,2*nlev*qsize,elem(ie)%desc)
+      call edgeVpack(edgeq,qtens(:,:,:,:,ie),nlrs,0,elem(ie)%desc)
+      call edgeVpack(edgeq,Qmin,nlrs,nlrs,elem(ie)%desc)
+      call edgeVpack(edgeq,Qmax,nlrs,2*nlrs,elem(ie)%desc)
    enddo
    
    call bndry_exchangeV(hybrid,edgeq)
    
    do ie=nets,nete
-      do q=1,qsize      
-      do k=1,nlev
-         Qmin(:,:,k,q)=emin(k,q,ie)  ! restore element data.  we could avoid
-         Qmax(:,:,k,q)=emax(k,q,ie)  ! this by adding a "ie" index to Qmin/max
-      enddo
+      do q=1,qsize
+         do k=1,nlev
+            Qmin(:,:,k,q)=emin(k,q,ie)  ! restore element data.  we could avoid
+            Qmax(:,:,k,q)=emax(k,q,ie)  ! this by adding a "ie" index to Qmin/max
+         enddo
       enddo
 ! WARNING - edgeVunpackMin/Max take second argument as input/ouput
-      call edgeVunpack(edgeq, qtens(:,:,:,:,ie),qsize*nlev,0,elem(ie)%desc)
-      call edgeVunpackMin(edgeq, Qmin,qsize*nlev,qsize*nlev,elem(ie)%desc)
-      call edgeVunpackMax(edgeq, Qmax,qsize*nlev,2*qsize*nlev,elem(ie)%desc)
+      call edgeVunpack(edgeq, qtens(:,:,:,:,ie),nlrs,0,elem(ie)%desc)
+      call edgeVunpackMin(edgeq, Qmin,nlrs,nlrs,elem(ie)%desc)
+      call edgeVunpackMax(edgeq, Qmax,nlrs,2*nlrs,elem(ie)%desc)
 
       ! apply inverse mass matrix, then apply laplace again
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k, q, lap_p)
 #endif
-      do q=1,qsize      
+      do q=1,qsize
         do k=1,nlev    !  Potential loop inversion (AAM)
            lap_p(:,:)=elem(ie)%rspheremp(:,:)*qtens(:,:,k,q,ie)
            qtens(:,:,k,q,ie)=laplace_sphere_wk(lap_p,deriv,elem(ie),var_coef=.true.)
@@ -456,6 +458,7 @@ logical var_coef1
 !$OMP BARRIER
 #endif
 #endif
+   call t_stopf('biharmonic_wk_scalar_minmax')
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end subroutine
 

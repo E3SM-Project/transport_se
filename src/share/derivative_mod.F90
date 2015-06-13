@@ -2564,12 +2564,11 @@ endif
 !   ouput:  -< grad(PHI), grad(s) >   = weak divergence of grad(s)
 !     note: for this form of the operator, grad(s) does not need to be made C0
 !            
-    real(kind=real_kind), intent(in) :: s(np,np) 
     logical, intent(in) :: var_coef
     type (derivative_t), intent(in) :: deriv
     type (element_t), intent(in) :: elem
+    real(kind=real_kind), intent(in) :: s(np,np)
     real(kind=real_kind)             :: laplace(np,np)
-    real(kind=real_kind)             :: laplace2(np,np)
     integer i,j
 
     ! Local

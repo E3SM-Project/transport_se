@@ -820,12 +820,12 @@ contains
       ! but that's ok because rhs_multiplier=0 on the first stage:
       Vstar(:,:,1,k) = elem(ie)%derived%vn0(:,:,1,k) / dp(:,:,k)
       Vstar(:,:,2,k) = elem(ie)%derived%vn0(:,:,2,k) / dp(:,:,k)
-
     enddo
 
     ! advance Qdp
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss)
+! commenting this out because of errors at lines 857--860 on Mira
+! !$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss)
 #endif
     do q = 1 , qsize
       do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
