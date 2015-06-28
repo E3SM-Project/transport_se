@@ -17,12 +17,22 @@
 #  1) Edit the path to the configuration script, if necessary
 #  2) Submit this script to the queue or execute it an interactive session
 #_______________________________________________________________________
+#set NCPU     = 960       # number of CPUs to use
+#set NTHREADS = 1          # number of openMP threads per MPI task
+#set NCPU_PER_NODE = 24     # number of MPI tasks per node
+
+#set NCPU     = 480       # number of CPUs to use
+#set NTHREADS = 2          # number of openMP threads per MPI task
+#set NCPU_PER_NODE = 12     # number of MPI tasks per node
+
+set NCPU     = 240       # number of CPUs to use
+set NTHREADS = 4          # number of openMP threads per MPI task
+set NCPU_PER_NODE = 6     # number of MPI tasks per node
 
 set NE       = 120        # number of elements per cube-edge
-set NCPU     = 960       # number of CPUs to use
-set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 75         # timestep size
 set NU       = 1e13       # hyperviscosity coefficient
+set QSIZE1 = 50  
 set CONFIGURE_DIR = ../../
 
 
@@ -43,6 +53,10 @@ set nmax = $nhours
 @ nmax *= 3600
 @ nmax /= $TSTEP
 
+# edison has 2 sockets per node
+set NUM_NUMA = $NCPU_PER_NODE
+@ NUM_NUMA /= 2
+
 
 
 #_______________________________________________________________________
@@ -53,9 +67,13 @@ if ($?PBS_O_WORKDIR) then
 endif
 
 cd ${CONFIGURE_DIR}; source configure.sh
+# override default RUN_COMMAND set in configure.sh
+set RUN_COMMAND="aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss "
+echo RUN_COMMAND:
+echo $RUN_COMMAND
 
-set QSIZE1 = $QSIZE
-set QSIZE1 = 50  # override default set in configure.sh
+
+
 
 
 set TEST1_DIR = $BLD_DIR/test/dcmip1-1  # test case directory
@@ -88,12 +106,13 @@ sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE120.nl
 
 cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
+setenv OMP_STACKSIZE 64M   
 date
 
 # run dcmip test 1-1
 echo "executing dcmip test 1-1"
-echo "${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE120.nl"
-${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE120.nl
+echo "${RUN_COMMAND}  $EXE < dcmip1-1_NE120.nl"
+${RUN_COMMAND}  $EXE < dcmip1-1_NE120.nl
 if($status) exit
 mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE120
 date

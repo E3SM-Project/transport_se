@@ -563,13 +563,17 @@ contains
           if (hybrid%masterthread) then
             print *,"initializing DCMIP test 1-1: 3d deformational flow"
           endif
+!$OMP CRITICAL
           call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%n0,tl,time=0.0d0)
+!$OMP END CRITICAL
 
        else if(test_case(1:8)=="dcmip1-2") then
           if (hybrid%masterthread) then
             print *,"initializing DCMIP test 1-2: Hadley-like circulation"
           endif
+!$OMP CRITICAL
           call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%n0,tl,time=0.0d0)
+!$OMP END CRITICAL
 
        else if (test_case(1:10) == "baroclinic") then
           if (hybrid%masterthread) then

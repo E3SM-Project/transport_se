@@ -74,3 +74,34 @@ ________________________________________________________________________________
 
 Typical results for run_ne120_test.sh on NERSC:Hopper
 
+IN QUE
+
+
+
+
+__________________________________________________________________________________________________________________
+
+Typical results for run_ne120_perf.sh on Edison:
+
+A x B x C, with
+A = nodes 
+B = mpitasks_per_node 
+C = threads_per_mpitask
+
+40 node cases.  2160 elements per node.  
+
+40x24x1
+prim_advec_tracers_remap_rk2         55.5s
+vertical_remap                        3.42s
+
+
+40x12x2
+prim_advec_tracers_remap_rk2         94.6s
+vertical_remap                        3.57s
+
+40x6x4
+prim_advec_tracers_remap_rk2        180.7s
+vertical_remap                       6.80s
+
+
+

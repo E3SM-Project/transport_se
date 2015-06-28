@@ -122,11 +122,14 @@ contains
     ! Set prescribed fields for DCMIP test cases
 
     if(test_case(1:8)=="dcmip1-1") then
+!$OMP CRITICAL
       call set_dcmip_1_1_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,tl,time)
+!$OMP END CRITICAL
 
     else if(test_case(1:8)=="dcmip1-2") then
+!$OMP CRITICAL
       call set_dcmip_1_2_fields(elem, hybrid,hvcoord,nets,nete,tl%np1,tl,time)
-
+!$OMP END CRITICAL
     else
 
       ! Apply constant T and v fields for ASP tests
