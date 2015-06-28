@@ -15,6 +15,21 @@ To test the mini-app:
   7) tail -n 40 ./out_ne8_jobid     examine timing and error norm results
   8) display ~/work/run/image_*     examine plots of tracer cross-sections
 
+
+Tests:
+run_ne8_test.sh:    ultra low-res test for quick debug/check  
+run_ne30_test.sh    1 degree test with 4 tracers for verification 
+run_ne120_test.sh   1/4 degree test for additonal, optional verification at high-res
+                    This test is expensive and often sits in the que for 1 day.
+
+run_ne120_perf.sh   Test case for performance testing
+                      DCMIP1-1 for 1 hour of model time.
+                      (we might have to increase run time )
+                      output disabled.  most diagnostics disabled
+
+
+
+
 __________________________________________________________________________________________________________________
 
 Typical results for run_ne8_test.sh on NERSC:Hopper
@@ -28,6 +43,13 @@ Typical results for run_ne8_test.sh on NERSC:Hopper
 
   Used Resources: cput=00:00:07,energy_used=0,mem=12220kb,vmem=123196kb,walltime=00:01:29
 
+Updated 2015-6-27 
+With rsplit and limiter=8 (monotone limiter) on Edison
+  DCMIP 1-1: L1=0.529721 L2= 0.637361 Linf= 0.616722 q_max= 0.459436 q_min= -2.24628e-08
+  DCMIP 1-2: L1=0.386038 L2= 0.556078 Linf= 0.914061 q_max= 0.987406 q_min= -2.64163e-06
+
+
+
 __________________________________________________________________________________________________________________
 
 Typical results for run_ne30_test.sh on NERSC:Hopper
@@ -37,9 +59,18 @@ Typical results for run_ne30_test.sh on NERSC:Hopper
   DCMIP1-2  prim_run  216    216      6.220800e+04  5.899456e+03  27.387  (   202      0)    25.604 (     1      0)
 
   DCMIP1-1: L1=0.1810760 L2= 0.209121 Linf= 0.317952 q_max= 1.014850 q_min= -0.0410253
-	DCMIP1-2: L1=0.0799994 L2= 0.150355 Linf= 0.297211 q_max= 0.977932 q_min= -5.7599e-13
+  DCMIP1-2: L1=0.0799994 L2= 0.150355 Linf= 0.297211 q_max= 0.977932 q_min= -5.7599e-13
 
   Used Resources: cput=00:00:09,energy_used=0,mem=97628kb,vmem=208712kb,walltime=00:08:41
 
+Updated 2015-6-27
+With rsplit limiter=8 (monotone limiter) on Edison
+  DCMIP 1-1: L1=0.138421  L2= 0.202415 Linf= 0.298503 q_max= 0.974222 q_min= -7.4405e-14
+  DCMIP 1-2: L1=0.0578899 L2= 0.123954 Linf= 0.270832 q_max= 0.979736 q_min= -1.26331e-12
 
+
+
+__________________________________________________________________________________________________________________
+
+Typical results for run_ne120_test.sh on NERSC:Hopper
 
