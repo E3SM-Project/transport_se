@@ -16,7 +16,7 @@
   tstep         = TIME_STEP
   tstep_type    = 1
   qsplit            = 1
-  rsplit            = 0
+  rsplit            = 3
   integration       = 'explicit'
   smooth            = 0
   nu                = 0

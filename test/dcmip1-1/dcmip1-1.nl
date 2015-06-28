@@ -17,14 +17,14 @@
   tstep             = TIME_STEP
   tstep_type        = 1
   qsplit            = 1
-  rsplit            = 0
+  rsplit            = 3
   integration       = "explicit"
   smooth            = 0.00        ! disabled
   nu                = 0
   nu_p              = 0
   nu_s              = 0
   nu_q              = 0 !2e16
-  limiter_option    = 0 !8
+  limiter_option    = 8
   hypervis_order    = 2
   hypervis_subcycle = 1
   prescribed_wind   = 1
