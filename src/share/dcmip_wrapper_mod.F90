@@ -11,7 +11,7 @@
 
 module dcmip_wrapper_mod
 
-use kinds,          only: rl=>real_kind
+use kinds,          only: real_kind
 use dimensions_mod, only: np, nlev, qsize, nlevp, qsize_d, nelemd
 use control_mod,    only: test_case
 use hybrid_mod,     only: hybrid_t
@@ -25,25 +25,25 @@ implicit none
 
 ! parameters for constant-temperature atmosphere cases
 
-real(rl), parameter :: T0 = 300.d0    ! temperature (K)
-real(rl), parameter :: H  = Rd*T0/g   ! scale height (m)
+real(real_kind), parameter :: T0 = 300.d0    ! temperature (K)
+real(real_kind), parameter :: H  = Rd*T0/g   ! scale height (m)
 
 ! arrays for accumulation of point-wise values
 
-real(rl) :: v_m(np,np,2,nlev)         ! horizontal velocity at layer midpoints
-real(rl) :: T_m(np,np,nlev)           ! temperature at layer midpoints
-real(rl) :: q_m(np,np,nlev,qsize_d)   ! tracer mixing ratios at midpoints
-real(rl) :: p_i(np,np,nlevp)          ! pressure at layer interfaces
-real(rl) :: p_m(np,np,nlev)           ! pressure at layer midpoints
-real(rl) :: phi_s(np,np)              ! geopotential at the surface
-real(rl) :: z_m(np,np,nlev)           ! z at layer midpoints
+real(real_kind) :: v_m(np,np,2,nlev)         ! horizontal velocity at layer midpoints
+real(real_kind) :: T_m(np,np,nlev)           ! temperature at layer midpoints
+real(real_kind) :: q_m(np,np,nlev,qsize_d)   ! tracer mixing ratios at midpoints
+real(real_kind) :: p_i(np,np,nlevp)          ! pressure at layer interfaces
+real(real_kind) :: p_m(np,np,nlev)           ! pressure at layer midpoints
+real(real_kind) :: phi_s(np,np)              ! geopotential at the surface
+real(real_kind) :: z_m(np,np,nlev)           ! z at layer midpoints
 
-real(rl) :: omega_m(np,np,nlev)       ! vertical pressure-velocity at midpoints
-real(rl) :: eta_dot_dpdn(np,np,nlevp) ! vertical flux at layer interfaces
+real(real_kind) :: omega_m(np,np,nlev)       ! vertical pressure-velocity at midpoints
+real(real_kind) :: eta_dot_dpdn(np,np,nlevp) ! vertical flux at layer interfaces
 
 ! single point-wise values
 
-real(rl) :: T,phis,ps,u,v,w,p,z,rho,q(qsize_d),lon,lat
+real(real_kind) :: T,phis,ps,u,v,w,p,z,rho,q(qsize_d),lon,lat
 integer  :: ie,i,j,k                  ! loop indices
 
 CONTAINS
@@ -59,7 +59,7 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
   integer,            intent(in)            :: nets, nete
   integer,            intent(in)            :: n0
   type (timelevel_t), intent(in)            :: tl                       ! time-level structure
-  real(rl),           intent(in)            :: time                     ! simulation time in seconds
+  real(real_kind),           intent(in)            :: time                     ! simulation time in seconds
 
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
 
@@ -91,6 +91,11 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
     ! fill element data-structure
     call set_element_state(elem(ie),hvcoord,n0,time)
+  
+    if(time==0d0) then
+       ! test case defined tracers 1..4.  set the rest to a checkerboard pattern
+       call set_extra_tracers(elem(ie),n0,5,qsize)
+    endif
 
   enddo!ie
 
@@ -109,7 +114,7 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
   integer,            intent(in)            :: nets, nete
   integer,            intent(in)            :: n0
   type (timelevel_t), intent(in)            :: tl                       ! time-level structure
-  real(rl),           intent(in)            :: time                     ! simulation time in seconds
+  real(real_kind),           intent(in)            :: time                     ! simulation time in seconds
 
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
 
@@ -141,6 +146,11 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
     ! fill element data-structure
     call set_element_state(elem(ie),hvcoord,n0,time)
+    if(time==0d0) then
+       ! test case defined tracer 2.  set the rest to a checkerboard pattern
+       call set_extra_tracers(elem(ie),n0,1,1)
+       call set_extra_tracers(elem(ie),n0,3,qsize)
+    endif
 
   enddo!ie
 
@@ -153,18 +163,18 @@ subroutine set_element_state(e, hvcoord, tl, time)
 
   ! set element state from accumulated field values
 
-  type (element_t), target, intent(in)  :: e        ! current element
+  type (element_t), target, intent(inout)  :: e        ! current element
   type(hvcoord_t),          intent(in)  :: hvcoord  ! vertical coordinate
   integer,                  intent(in)  :: tl       ! time level
-  real(rl),                 intent(in)  :: time     ! simulation time in seconds
+  real(real_kind),                 intent(in)  :: time     ! simulation time in seconds
 
   integer :: qi,k
 
   type(elem_state_t),    pointer :: s
   type(derived_state_t), pointer :: d
 
-  real(rl) :: dp(np,np,nlev), dn(nlev)
-  real(rl) :: dpdn_m(np,np,nlev)
+  real(real_kind) :: dp(np,np,nlev), dn(nlev)
+  real(real_kind) :: dpdn_m(np,np,nlev)
 
   ! set state variables
 
@@ -199,10 +209,43 @@ subroutine set_element_state(e, hvcoord, tl, time)
 
 end subroutine
 
+
+
+!_______________________________________________________________________
+subroutine set_extra_tracers(elem, tl, q1,q2)
+
+  ! set element state from accumulated field values
+
+  type (element_t), target, intent(inout)  :: elem        ! current element
+  integer,                  intent(in)  :: tl       ! time level
+  integer,                  intent(in)  :: q1       ! starting tracer index
+  integer,                  intent(in)  :: q2       ! end tracer index
+
+  integer :: i,j,qi,k
+  real(real_kind) :: term
+
+  do qi=q1,q2
+      do j=1,np
+      do i=1,np
+         term = sin(9.*elem%spherep(i,j)%lon)*sin(9.*elem%spherep(i,j)%lat)
+         if ( term < 0. ) then
+            elem%state%Q(i,j,:,qi) = 0
+         else
+            elem%state%Q(i,j,:,qi) = 1
+         endif
+      enddo
+      enddo 
+
+      elem%state%Qdp(:,:,:,qi,1)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
+      elem%state%Qdp(:,:,:,qi,2)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
+  enddo
+
+end subroutine
+
 !_______________________________________________________________________
 subroutine cache_midpoint_values(i,j,k,u,v,p,T,q,z)
 integer   :: i,j,k
-real(rl)  :: T,u,v,w,p,z,rho,q(qsize_d)
+real(real_kind)  :: T,u,v,w,p,z,rho,q(qsize_d)
 
 v_m(i,j,1,k)  = u;  v_m(i,j,2,k)  = v
 p_m(i,j,k)    = p;  T_m(i,j,k)    = T
@@ -214,7 +257,7 @@ end subroutine
 !_______________________________________________________________________
 subroutine cache_interface_values(i,j,k,p,phis,rho,w)
 integer   :: i,j,k
-real(rl)  :: p,phis,rho,w
+real(real_kind)  :: p,phis,rho,w
 
 p_i(i,j,k) = p
 phi_s(i,j) = phis
@@ -234,15 +277,15 @@ subroutine collect_tracer_statistics(elem,hybrid,tl,time,nets,nete)
   type(element_t),    intent(in), target :: elem(:)
   type(hybrid_t),     intent(in) :: hybrid
   type (timelevel_t), intent(in) :: tl
-  real(rl),           intent(in) :: time
+  real(real_kind),           intent(in) :: time
   integer,            intent(in) :: nets, nete
 
   integer :: ie, qi
   integer :: npts = size(phi_s,1)
 
-  real(rl), dimension(np,np,nets:nete) :: local_Qmass
-  real(rl), dimension(nets:nete):: local_qmin, local_qmax
-  real(rl), dimension(qsize_d)  :: qmass, qmax, qmin
+  real(real_kind), dimension(np,np,nets:nete) :: local_Qmass
+  real(real_kind), dimension(nets:nete):: local_qmin, local_qmax
+  real(real_kind), dimension(qsize_d)  :: qmass, qmax, qmin
 
   ! collect statistics at interval specified by statfreq
 
@@ -274,11 +317,11 @@ subroutine write_level_files()
 
   ! write hyai and hybi levels to file for dcmip1-1 test
 
-  real(rl), parameter :: z_top = 12000.d0 ! top of atmosphere (m)
-  real(rl), parameter :: c     = 2.0d0
+  real(real_kind), parameter :: z_top = 12000.d0 ! top of atmosphere (m)
+  real(real_kind), parameter :: c     = 2.0d0
 
-  real(rl) :: zi(nlevp), eta_i(nlevp)
-  real(rl) :: Am(nlev), Bm(nlev), Ai(nlevp), Bi(nlevp)
+  real(real_kind) :: zi(nlevp), eta_i(nlevp)
+  real(real_kind) :: Am(nlev), Bm(nlev), Ai(nlevp), Bi(nlevp)
 
   integer :: k
 

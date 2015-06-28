@@ -763,6 +763,11 @@ contains
     dt_q      = dt*qsplit
     dt_remap  = dt_q
     nstep_end = tl%nstep + qsplit
+    if (rsplit>0) then
+       dt_remap=dt_q*rsplit   ! rsplit=0 means use eulerian code, not vert. lagrange
+       nstep_end = tl%nstep + qsplit*rsplit  ! nstep at end of this routine
+    endif
+
 
     ! compute diagnostics and energy for STDOUT
     ! compute energy if we are using an energy fixer
@@ -795,10 +800,13 @@ contains
     ! Take tracers and dynamics steps
 
     call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,compute_diagnostics,1)
-    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
+    do r=2,rsplit
+       call TimeLevel_update(tl,"leapfrog")
+       call prim_step(elem, hybrid,nets,nete, dt, tl, hvcoord,.false.,r)
+    enddo
 
     ! Perform vertical remap
-
+    call TimeLevel_Qdp( tl, qsplit, n0_qdp, np1_qdp)
     call vertical_remap(hybrid,elem,hvcoord,dt_remap,tl%np1,np1_qdp,nets,nete)
 
 #if USE_CUDA_FORTRAN
@@ -926,7 +934,7 @@ contains
       endif
 
     ! Save dp at time t for use in tracers
-
+      if (rsplit==0) then
 #if (defined COLUMN_OPENMP)
 !$omp parallel do default(shared), private(k)
 #endif
@@ -935,14 +943,15 @@ contains
                  ( hvcoord%hyai(k+1) - hvcoord%hyai(k) )*hvcoord%ps0 + &
                  ( hvcoord%hybi(k+1) - hvcoord%hybi(k) )*elem(ie)%state%ps_v(:,:,tl%n0)
          enddo
+      else
+         elem(ie)%derived%dp(:,:,:)=elem(ie)%state%dp3d(:,:,:,tl%n0)
+      endif 
     enddo
 
     ! Advance dynamics
-
     call prim_advance_exp(elem, deriv(hybrid%ithr), hvcoord, hybrid, dt, tl, nets, nete, compute_diagnostics)
 
     ! Advance tracers
-
     call Prim_Advec_Tracers_remap(elem, deriv(hybrid%ithr),hvcoord,flt_advection,hybrid,dt_q,tl,nets,nete)
 
   end subroutine prim_step
