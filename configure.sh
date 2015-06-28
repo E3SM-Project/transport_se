@@ -20,7 +20,10 @@ set REPO=$HOME/CODE/transport_se                  # transport_se repository
 set WORK=$cwd                                     # work directory for building and running
 set MACH=$REPO/cmake/machineFiles/edison.cmake    # machine specific cmake file
 
-set QSIZE=4                                       # max number of tracers
+
+# if you change these, remove the executable to force this script to reconfigure
+set QSIZE_D=50                                    # max number of tracers (array size)
+set QSIZE=4                                       # number of tracers to run (default)
 set NLEV=64                                       # number of vertical levels
 
 set RUN_COMMAND="aprun -n"                        # command to launch parallel executable
@@ -78,7 +81,7 @@ else
   rm -rf CMakeFiles CMakeCache.txt src
 
   cmake -C $MACH                \
-   -DQSIZE_D=$QSIZE             \
+   -DQSIZE_D=$QSIZE_D           \
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
    -DENABLE_OPENMP=TRUE         \
