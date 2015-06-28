@@ -1,5 +1,6 @@
 #!/bin/tcsh
-#
+#PBS -A acme
+#PBS -q debug
 #PBS -l walltime=0:25:00
 #PBS -l mppwidth=216
 #PBS -j oe
@@ -20,6 +21,12 @@ set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 300        # timestep size
 set NU       = 1e15       # hyperviscosity coefficient
 set CONFIGURE_DIR = ../../
+
+
+# diagnostic output every 6h
+set statefreq = 6     
+@ statefreq *= 3600
+@ statefreq /= $TSTEP
 
 #_______________________________________________________________________
 # get path variables from configure script:
@@ -46,9 +53,9 @@ cp -a $VCOORD vcoord
 cd $TEST1_DIR
 sed s/NE.\*/$NE/ dcmip1-1.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/statefreq.\*/statefreq=100/     |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE30.nl
 
 #_______________________________________________________________________
@@ -56,9 +63,9 @@ sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE30.nl
 cd $TEST2_DIR
 sed s/NE.\*/$NE/ dcmip1-2.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/statefreq.\*/statefreq=100/     |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2_NE30.nl
 
 #_______________________________________________________________________

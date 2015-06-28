@@ -1,5 +1,5 @@
 #!/bin/tcsh
-#
+#PBS -q debug
 #PBS -l walltime=0:05:00
 #PBS -l mppwidth=48
 #PBS -j oe
@@ -17,9 +17,14 @@
 set NE       = 8          # number of elements per cube-edge
 set NCPU     = 48         # number of CPUs to use
 set NTHREADS = 1          # number of openMP threads
-set TSTEP    = 1440       # timestep size
-set NU       = 2e16       # hyperviscosity coefficient
+set TSTEP    = 1200       # note: remap time should not exceed 1800, so set rsplit=1
+set NU       = 6e16       # hyperviscosity coefficient
 set CONFIGURE_DIR = ../../
+
+# diagnostic output every 6h
+set statefreq = 6     
+@ statefreq *= 3600
+@ statefreq /= $TSTEP
 
 #_______________________________________________________________________
 # get path variables from configure script:
@@ -46,7 +51,9 @@ cp -a $VCOORD vcoord
 cd $TEST1_DIR
 sed s/NE.\*/$NE/ dcmip1-1.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
+sed s/rsplit.\*/rsplit=1/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE8.nl
 
@@ -55,7 +62,9 @@ sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE8.nl
 cd $TEST2_DIR
 sed s/NE.\*/$NE/ dcmip1-2.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
+sed s/rsplit.\*/rsplit=1/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2_NE8.nl
 
