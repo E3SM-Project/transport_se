@@ -122,7 +122,7 @@ echo "Running analysis scripts on data in native-grid format"
 echo
 cp $TEST1_DIR/dcmip1-1_lat_lon_ng.ncl .
 cp $TEST2_DIR/dcmip1-2_lat_height_ng.ncl .
-ncl dcmip1-1_lat_lon.ncl
+ncl dcmip1-1_lat_lon_ng.ncl
 ncl dcmip1-2_lat_height_ng.ncl
 
 # print timing info
