@@ -7,8 +7,8 @@
 #PBS -e err_ne120_$PBS_JOBID
 
 # Be sure to change MPI/threads here and NCPU/NTHREADS below
-#PBS -l mppwidth=960
-#PBSXXX -l mppwidth=1920
+#XXX -l mppwidth=960
+#PBS -l mppwidth=10800
 
 #_______________________________________________________________________
 #
@@ -17,17 +17,10 @@
 #  1) Edit the path to the configuration script, if necessary
 #  2) Submit this script to the queue or execute it an interactive session
 #_______________________________________________________________________
-#set NCPU     = 960       # number of CPUs to use
-#set NTHREADS = 1          # number of openMP threads per MPI task
-#set NCPU_PER_NODE = 24     # number of MPI tasks per node
+set NCPU     = 10800      # number of CPUs to use
+set NTHREADS = 1          # number of openMP threads per MPI task
+set NCPU_PER_NODE = 24     # number of MPI tasks per node
 
-#set NCPU     = 480       # number of CPUs to use
-#set NTHREADS = 2          # number of openMP threads per MPI task
-#set NCPU_PER_NODE = 12     # number of MPI tasks per node
-
-set NCPU     = 240       # number of CPUs to use
-set NTHREADS = 4          # number of openMP threads per MPI task
-set NCPU_PER_NODE = 6     # number of MPI tasks per node
 
 set NE       = 120        # number of elements per cube-edge
 set TSTEP    = 75         # timestep size
@@ -67,8 +60,11 @@ if ($?PBS_O_WORKDIR) then
 endif
 
 cd ${CONFIGURE_DIR}; source configure.sh
+# override RUN_DIR, so we can que multiple runs at once:
+set RUN_DIR = ${RUN_DIR}_$$
+
 # override default RUN_COMMAND set in configure.sh
-set RUN_COMMAND="aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss "
+set RUN_COMMAND="aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node "
 echo RUN_COMMAND:
 echo $RUN_COMMAND
 

@@ -8,7 +8,6 @@
 
 # Be sure to change MPI/threads here and NCPU/NTHREADS below
 #PBS -l mppwidth=960
-#PBSXXX -l mppwidth=1920
 
 #_______________________________________________________________________
 #

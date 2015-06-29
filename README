@@ -91,17 +91,23 @@ C = threads_per_mpitask
 40 node cases.  2160 elements per node.  
 
 40x24x1
-prim_advec_tracers_remap_rk2         55.5s
-vertical_remap                        3.42s
+prim_advec_tracers_remap_rk2         53.343
+vertical_remap                        1.800
+
+40x12x2                              56.085
+prim_advec_tracers_remap_rk2          1.801
+vertical_remap                       
+
+40x6x4                               
+prim_advec_tracers_remap_rk2         63.195
+vertical_remap                        1.769
+
+40x12x2                               
+prim_advec_tracers_remap_rk2         88.949
+vertical_remap                        1.765
 
 
-40x12x2
-prim_advec_tracers_remap_rk2         94.6s
-vertical_remap                        3.57s
 
-40x6x4
-prim_advec_tracers_remap_rk2        180.7s
-vertical_remap                       6.80s
 
 
 
