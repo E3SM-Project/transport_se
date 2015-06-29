@@ -7,7 +7,7 @@
 #PBS -e err_ne120_$PBS_JOBID
 
 # Be sure to change MPI/threads here and NCPU/NTHREADS below
-#PBS -l mppwidth=960
+#PBS -l mppwidth=1920
 
 #_______________________________________________________________________
 #
@@ -18,7 +18,7 @@
 #_______________________________________________________________________
 
 set NE       = 120        # number of elements per cube-edge
-set NCPU     = 960       # number of CPUs to use
+set NCPU     = 1920       # number of CPUs to use
 set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 75         # timestep size
 set NU       = 1e13       # hyperviscosity coefficient
