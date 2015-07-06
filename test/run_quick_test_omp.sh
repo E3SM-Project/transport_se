@@ -1,5 +1,5 @@
 #!/bin/tcsh
-#
+#PBS -q debug
 #PBS -l walltime=0:05:00
 #PBS -l mppwidth=48
 #PBS -j oe
@@ -47,6 +47,7 @@ sed s/NE.\*/$NE/ dcmip1-2.nl          |\
 sed s/TIME_STEP.\*/$TSTEP/            |\
 sed s/qsize.\*/qsize=$QSIZE/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
+sed s/rsplit.\*/rsplit=1/             |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2_NE8.nl
 
 #_______________________________________________________________________

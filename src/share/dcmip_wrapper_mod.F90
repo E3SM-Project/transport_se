@@ -37,14 +37,11 @@ real(real_kind) :: p_i(np,np,nlevp)          ! pressure at layer interfaces
 real(real_kind) :: p_m(np,np,nlev)           ! pressure at layer midpoints
 real(real_kind) :: phi_s(np,np)              ! geopotential at the surface
 real(real_kind) :: z_m(np,np,nlev)           ! z at layer midpoints
-
 real(real_kind) :: omega_m(np,np,nlev)       ! vertical pressure-velocity at midpoints
 real(real_kind) :: eta_dot_dpdn(np,np,nlevp) ! vertical flux at layer interfaces
 
-! single point-wise values
-
-real(real_kind) :: T,phis,ps,u,v,w,p,z,rho,q(qsize_d),lon,lat
-integer  :: ie,i,j,k                  ! loop indices
+! make module-level variables private to each thread
+!$OMP THREADPRIVATE(v_m,T_m,q_m,p_i,p_m,phi_s,z_m,omega_m,eta_dot_dpdn)
 
 CONTAINS
 
@@ -59,8 +56,10 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
   integer,            intent(in)            :: nets, nete
   integer,            intent(in)            :: n0
   type (timelevel_t), intent(in)            :: tl                       ! time-level structure
-  real(real_kind),           intent(in)            :: time                     ! simulation time in seconds
+  real(real_kind),    intent(in)            :: time                     ! simulation time in seconds
 
+  real(real_kind) :: T,phis,ps,u,v,w,p,z,rho,q(qsize_d),lon,lat         ! point-wise values
+  integer :: ie,i,j,k                                                   ! loop indices
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
 
   do ie= nets, nete
@@ -91,10 +90,10 @@ subroutine set_dcmip_1_1_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
     ! fill element data-structure
     call set_element_state(elem(ie),hvcoord,n0,time)
-  
+
+    ! fill unused tracers with a checkerboard pattern
     if(time==0d0) then
-       ! test case defined tracers 1..4.  set the rest to a checkerboard pattern
-       call set_extra_tracers(elem(ie),n0,5,qsize)
+       call set_extra_tracers(elem(ie),n0,5,qsize) ! fill tracers 5..qsize
     endif
 
   enddo!ie
@@ -114,8 +113,10 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
   integer,            intent(in)            :: nets, nete
   integer,            intent(in)            :: n0
   type (timelevel_t), intent(in)            :: tl                       ! time-level structure
-  real(real_kind),           intent(in)            :: time                     ! simulation time in seconds
+  real(real_kind),    intent(in)            :: time                     ! simulation time in seconds
 
+  real(real_kind) :: T,phis,ps,u,v,w,p,z,rho,q(qsize_d),lon,lat         ! point-wise values
+  integer :: ie,i,j,k                                                   ! loop indices
   integer,  parameter :: zcoords  = 1                                   ! use z coordinate
 
   do ie= nets, nete
@@ -146,10 +147,11 @@ subroutine set_dcmip_1_2_fields(elem, hybrid, hvcoord, nets, nete, n0, tl, time)
 
     ! fill element data-structure
     call set_element_state(elem(ie),hvcoord,n0,time)
+
+    ! fill unused tracers with a checkerboard pattern
     if(time==0d0) then
-       ! test case defined tracer 2.  set the rest to a checkerboard pattern
-       call set_extra_tracers(elem(ie),n0,1,1)
-       call set_extra_tracers(elem(ie),n0,3,qsize)
+       call set_extra_tracers(elem(ie),n0,1,1)      ! fill tracer  1
+       call set_extra_tracers(elem(ie),n0,3,qsize)  ! fill tracers 3..qsize
     endif
 
   enddo!ie
@@ -163,10 +165,10 @@ subroutine set_element_state(e, hvcoord, tl, time)
 
   ! set element state from accumulated field values
 
-  type (element_t), target, intent(inout)  :: e        ! current element
-  type(hvcoord_t),          intent(in)  :: hvcoord  ! vertical coordinate
-  integer,                  intent(in)  :: tl       ! time level
-  real(real_kind),                 intent(in)  :: time     ! simulation time in seconds
+  type (element_t), target, intent(inout) :: e        ! current element
+  type(hvcoord_t),          intent(in)    :: hvcoord  ! vertical coordinate
+  integer,                  intent(in)    :: tl       ! time level
+  real(real_kind),          intent(in)    :: time     ! simulation time in seconds
 
   integer :: qi,k
 
@@ -209,23 +211,21 @@ subroutine set_element_state(e, hvcoord, tl, time)
 
 end subroutine
 
-
-
 !_______________________________________________________________________
 subroutine set_extra_tracers(elem, tl, q1,q2)
 
-  ! set element state from accumulated field values
+  ! fill unusued tracers with a checkerboard pattern
 
-  type (element_t), target, intent(inout)  :: elem        ! current element
-  integer,                  intent(in)  :: tl       ! time level
-  integer,                  intent(in)  :: q1       ! starting tracer index
-  integer,                  intent(in)  :: q2       ! end tracer index
+  type (element_t), target, intent(inout):: elem  ! current element
+  integer,                  intent(in)   :: tl    ! time level
+  integer,                  intent(in)   :: q1    ! starting tracer index
+  integer,                  intent(in)   :: q2    ! end tracer index
 
   integer :: i,j,qi,k
   real(real_kind) :: term
 
   do qi=q1,q2
-      do j=1,np
+    do j=1,np
       do i=1,np
          term = sin(9.*elem%spherep(i,j)%lon)*sin(9.*elem%spherep(i,j)%lat)
          if ( term < 0. ) then
@@ -234,34 +234,34 @@ subroutine set_extra_tracers(elem, tl, q1,q2)
             elem%state%Q(i,j,:,qi) = 1
          endif
       enddo
-      enddo 
+    enddo
 
-      elem%state%Qdp(:,:,:,qi,1)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
-      elem%state%Qdp(:,:,:,qi,2)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
+    elem%state%Qdp(:,:,:,qi,1)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
+    elem%state%Qdp(:,:,:,qi,2)  = elem%state%Q(:,:,:,qi)*elem%state%dp3d(:,:,:,tl)
   enddo
 
 end subroutine
 
 !_______________________________________________________________________
 subroutine cache_midpoint_values(i,j,k,u,v,p,T,q,z)
-integer   :: i,j,k
-real(real_kind)  :: T,u,v,w,p,z,rho,q(qsize_d)
+  integer   :: i,j,k
+  real(real_kind)  :: T,u,v,w,p,z,rho,q(qsize_d)
 
-v_m(i,j,1,k)  = u;  v_m(i,j,2,k)  = v
-p_m(i,j,k)    = p;  T_m(i,j,k)    = T
-q_m(i,j,k,:)  = q;  z_m(i,j,k)    = z
-omega_m(i,j,k)= -g*rho*w
+  v_m(i,j,1,k)  = u;  v_m(i,j,2,k)  = v
+  p_m(i,j,k)    = p;  T_m(i,j,k)    = T
+  q_m(i,j,k,:)  = q;  z_m(i,j,k)    = z
+  omega_m(i,j,k)= -g*rho*w
 
 end subroutine
 
 !_______________________________________________________________________
 subroutine cache_interface_values(i,j,k,p,phis,rho,w)
-integer   :: i,j,k
-real(real_kind)  :: p,phis,rho,w
+  integer   :: i,j,k
+  real(real_kind)  :: p,phis,rho,w
 
-p_i(i,j,k) = p
-phi_s(i,j) = phis
-eta_dot_dpdn(i,j,k) = -g*rho*w
+  p_i(i,j,k) = p
+  phi_s(i,j) = phis
+  eta_dot_dpdn(i,j,k) = -g*rho*w
 
 end subroutine
 
