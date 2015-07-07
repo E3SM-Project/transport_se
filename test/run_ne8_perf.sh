@@ -14,9 +14,10 @@
 #  2) Submit this script to the queue or execute it an interactive session
 #________________
 #  _______________________________________________________
-set NCPU     = 384     # number of CPUs to use
-set NTHREADS = 4          # number of openMP threads per MPI task
+set NCPU     = 384        # total number of MPI tasks to use
 set NCPU_PER_NODE = 6     # number of MPI tasks per node
+set NTHREADS = 4          # number of OpenMP threads per MPI task
+set VTHREADS = 2          # number of nested OpenMP threads
 
 set NE       = 8          # number of elements per cube-edge
 set TSTEP    = 1200       # note: remap time should not exceed 1800, so set rsplit=1
@@ -71,6 +72,7 @@ sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE1/          |\
 sed s/rsplit.\*/rsplit=1/          |\
 sed s/NThreads.\*/NThreads=$NTHREADS/ |\
+sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE8.nl
 
 #_______________________________________________________________________
@@ -78,6 +80,7 @@ sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE8.nl
 
 cd $RUN_DIR
 setenv OMP_NUM_THREADS $NTHREADS
+#setenv OMP_NESTED TRUE
 date
 
 # run dcmip test 1-1
