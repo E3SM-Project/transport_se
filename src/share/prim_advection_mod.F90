@@ -976,13 +976,7 @@ contains
 
     
 
-     iter=0
-     do 
-      iter=iter+1
-
-      if(iter>maxiter)then
-        exit
-      endif
+     do iter=1,maxiter
 
       addmass=0.0d0
 
@@ -997,7 +991,7 @@ contains
          endif
        enddo !k1
 
-       if(abs(addmass)>tol_limiter*abs(mass))then
+       if(abs(addmass)<=tol_limiter*abs(mass)) exit
 
        weightssum=0.0d0
        if(addmass>0)then
@@ -1024,9 +1018,6 @@ contains
         enddo
       endif
 
-    else
-      exit
-    endif
 
    enddo!end of iteration
 
