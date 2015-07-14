@@ -1000,11 +1000,11 @@ contains
       addmass=0.0d0
 
        do k1=1,np*np
-         if((x(k1)>=maxp(k))) then
+         if((x(k1)>maxp(k))) then
            addmass=addmass+(x(k1)-maxp(k))*c(k1)
            x(k1)=maxp(k)
          endif
-         if((x(k1)<=minp(k))) then
+         if((x(k1)<minp(k))) then
            addmass=addmass-(minp(k)-x(k1))*c(k1)
            x(k1)=minp(k)
          endif
@@ -1019,36 +1019,25 @@ contains
             weightssum=weightssum+c(k1)
           endif
         enddo !k1
-        if(weightssum>0.0)then
-          do k1=1,np*np
-            if(x(k1)<maxp(k))then
-                x(k1)=x(k1)+addmass/weightssum
-            endif
-          enddo
-        else
-          ! x=x+addmass/sum(c)
-          exit
-        endif
+        do k1=1,np*np
+          if(x(k1)<maxp(k))then
+              x(k1)=x(k1)+addmass/weightssum
+          endif
+        enddo
       else
         do k1=1,np*np
           if(x(k1)>minp(k))then
             weightssum=weightssum+c(k1)
           endif
         enddo
-        if(weightssum>0.0)then
-          do k1=1,np*np
-            if(x(k1)>minp(k))then
-              x(k1)=x(k1)+addmass/weightssum
-            endif
-          enddo
-        else
-          !x=x+addmass/sum(c)
-          exit
-        endif
+        do k1=1,np*np
+          if(x(k1)>minp(k))then
+            x(k1)=x(k1)+addmass/weightssum
+          endif
+        enddo
       endif
 
     else
-      !x=x+addmass/sum(c)
       exit
     endif
 
