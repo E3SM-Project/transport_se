@@ -937,10 +937,8 @@ contains
     real (kind=real_kind), dimension(np,np,nlev), intent(in), optional  :: dpmass
     real (kind=real_kind), dimension(np,np), intent(in)   :: sphweights
 
-    real (kind=real_kind), dimension(np,np,nlev) :: weights
     real (kind=real_kind), dimension(np,np) :: ptens_mass
     integer  k1, k, i, j, iter
-
     real (kind=real_kind) :: addmass, weightssum, mass, sumc
     real (kind=real_kind) :: x(np*np),c(np*np)
     integer :: maxiter = np*np-2
