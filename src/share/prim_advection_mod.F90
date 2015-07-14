@@ -944,8 +944,8 @@ contains
 
     real (kind=real_kind) :: addmass, weightssum, mass, sumc
     real (kind=real_kind) :: x(np*np),c(np*np)
-    integer, parameter :: maxiter = 5
-    real (kind=real_kind) :: tol_limiter = 1e-15
+    integer :: maxiter = np*np-2
+    real (kind=real_kind) :: tol_limiter = 5e-14
 
     do k=1,nlev
       weights(:,:,k)=sphweights(:,:)
@@ -970,12 +970,25 @@ contains
 
      mass=sum(c*x)
      sumc=sum(c)
+#if 0
      if((mass-minp(k)*sumc<-tol_limiter))then
        minp(k)=mass/sumc
      endif
      if((mass-maxp(k)*sumc>tol_limiter))then
        maxp(k)=mass/sumc
-     endif 
+    endif
+#endif    
+      ! relax constraints to ensure limiter has a solution:
+      ! This is only needed if runnign with the SSP CFL>1 or
+      ! due to roundoff errors
+      if( (mass / sumc) < minp(k) ) then
+        minp(k) = mass / sumc
+      endif
+      if( (mass / sumc) > maxp(k) ) then
+        maxp(k) = mass / sumc
+      endif
+
+    
 
      iter=0
      do 
@@ -1018,7 +1031,7 @@ contains
             endif
           enddo
         else
-          x=x+addmass/sum(c)
+          ! x=x+addmass/sum(c)
           exit
         endif
       else
@@ -1034,13 +1047,13 @@ contains
             endif
           enddo
         else
-          x=x+addmass/sum(c)
+          !x=x+addmass/sum(c)
           exit
         endif
       endif
 
     else
-      x=x+addmass/sum(c)
+      !x=x+addmass/sum(c)
       exit
     endif
 
