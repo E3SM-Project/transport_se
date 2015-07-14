@@ -946,44 +946,28 @@ contains
     integer :: maxiter = np*np-2
     real (kind=real_kind) :: tol_limiter = 5e-14
 
-    do k=1,nlev
-      weights(:,:,k)=sphweights(:,:)
-    enddo
-
-!if dpmass is given, we first get (\rho Q)/(\rho) fields
-    do k=1,nlev
-      weights(:,:,k)=weights(:,:,k)*dpmass(:,:,k)
-      ptens(:,:,k)=ptens(:,:,k)/dpmass(:,:,k)
-    enddo
  
     do k=1,nlev
 
      k1=1
      do i=1,np
       do j=1,np
-       c(k1)=weights(i,j,k)
-       x(k1)=ptens(i,j,k)
+       c(k1)=sphweights(i,j)*dpmass(i,j,k)
+       x(k1)=ptens(i,j,k)/dpmass(i,j,k)
        k1=k1+1
       enddo
      enddo
 
      mass=sum(c*x)
      sumc=sum(c)
-#if 0
-     if((mass-minp(k)*sumc<-tol_limiter))then
-       minp(k)=mass/sumc
-     endif
-     if((mass-maxp(k)*sumc>tol_limiter))then
-       maxp(k)=mass/sumc
-    endif
-#endif    
+
       ! relax constraints to ensure limiter has a solution:
       ! This is only needed if runnign with the SSP CFL>1 or
       ! due to roundoff errors
-      if( (mass / sumc) < minp(k) ) then
+      if( mass < minp(k)*sumc ) then
         minp(k) = mass / sumc
       endif
-      if( (mass / sumc) > maxp(k) ) then
+      if( mass > maxp(k)*sumc ) then
         maxp(k) = mass / sumc
       endif
 
