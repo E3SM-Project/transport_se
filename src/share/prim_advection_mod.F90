@@ -959,7 +959,7 @@ contains
      enddo
 
      sumc=sum(c)
-     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it doesn, dont limit
+     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it does, dont limit
      mass=sum(c*x)
 
     
