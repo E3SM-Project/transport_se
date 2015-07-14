@@ -940,7 +940,6 @@ contains
     real (kind=real_kind), dimension(np,np,nlev) :: weights
     real (kind=real_kind), dimension(np,np) :: ptens_mass
     integer  k1, k, i, j, iter
-    logical :: whois_neg(np*np), whois_pos(np*np)
 
     real (kind=real_kind) :: addmass, weightssum, mass, sumc
     real (kind=real_kind) :: x(np*np),c(np*np)
@@ -1001,17 +1000,13 @@ contains
       addmass=0.0d0
 
        do k1=1,np*np
-         whois_neg(k1)=.true.
-         whois_pos(k1)=.true.
          if((x(k1)>=maxp(k))) then
            addmass=addmass+(x(k1)-maxp(k))*c(k1)
            x(k1)=maxp(k)
-           whois_pos(k1)=.false.
          endif
          if((x(k1)<=minp(k))) then
            addmass=addmass-(minp(k)-x(k1))*c(k1)
            x(k1)=minp(k)
-           whois_neg(k1)=.false.
          endif
        enddo !k1
 
@@ -1020,13 +1015,13 @@ contains
        weightssum=0.0d0
        if(addmass>0)then
         do k1=1,np*np
-          if(whois_pos(k1))then
+          if(x(k1)<maxp(k))then
             weightssum=weightssum+c(k1)
           endif
         enddo !k1
         if(weightssum>0.0)then
           do k1=1,np*np
-            if(whois_pos(k1))then
+            if(x(k1)<maxp(k))then
                 x(k1)=x(k1)+addmass/weightssum
             endif
           enddo
@@ -1036,13 +1031,13 @@ contains
         endif
       else
         do k1=1,np*np
-          if(whois_neg(k1))then
+          if(x(k1)>minp(k))then
             weightssum=weightssum+c(k1)
           endif
         enddo
         if(weightssum>0.0)then
           do k1=1,np*np
-            if(whois_neg(k1))then
+            if(x(k1)>minp(k))then
               x(k1)=x(k1)+addmass/weightssum
             endif
           enddo
