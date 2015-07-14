@@ -951,15 +951,18 @@ contains
 
      k1=1
      do i=1,np
-      do j=1,np
+     do j=1,np
        c(k1)=sphweights(i,j)*dpmass(i,j,k)
        x(k1)=ptens(i,j,k)/dpmass(i,j,k)
        k1=k1+1
       enddo
      enddo
 
-     mass=sum(c*x)
      sumc=sum(c)
+     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it doesn, dont limit
+     mass=sum(c*x)
+
+    
 
       ! relax constraints to ensure limiter has a solution:
       ! This is only needed if runnign with the SSP CFL>1 or
