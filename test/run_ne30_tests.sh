@@ -14,10 +14,14 @@
 #  1) Edit the path to the configuration script, if necessary
 #  2) Submit this script to the queue or execute it an interactive session
 #_______________________________________________________________________
+#set NCPU     = 216        # number of CPUs to use
+#set NTHREADS = 1          # number of openMP threads
+
+set NCPU     = 54        # number of CPUs to use
+set NTHREADS = 4         # number of openMP threads
+
 
 set NE       = 30         # number of elements per cube-edge
-set NCPU     = 216        # number of CPUs to use
-set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 300        # timestep size
 set NU       = 1e15       # hyperviscosity coefficient
 set CONFIGURE_DIR = ../../

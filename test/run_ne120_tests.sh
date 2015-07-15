@@ -1,13 +1,13 @@
 #!/bin/tcsh
-#PBS -q regular
+#PBS -q debug
 #PBS -A acme
-#PBS -l walltime=01:00:00
+#PBS -l walltime=00:30:00
 #PBS -j oe
 #PBS -o out_ne120_$PBS_JOBID
 #PBS -e err_ne120_$PBS_JOBID
 
 # Be sure to change MPI/threads here and NCPU/NTHREADS below
-#PBS -l mppwidth=1920
+#PBS -l mppwidth=1440
 
 #_______________________________________________________________________
 #
@@ -18,15 +18,15 @@
 #_______________________________________________________________________
 
 set NE       = 120        # number of elements per cube-edge
-set NCPU     = 1920       # number of CPUs to use
+set NCPU     = 1440       # number of CPUs to use
 set NTHREADS = 1          # number of openMP threads
 set TSTEP    = 75         # timestep size
 set NU       = 1e13       # hyperviscosity coefficient
 set CONFIGURE_DIR = ../../
 
 
-# diagnostic output every 2day
-set statefreq = 48     
+# diagnostic output every day
+set statefreq = 24
 @ statefreq *= 3600
 @ statefreq /= $TSTEP
 

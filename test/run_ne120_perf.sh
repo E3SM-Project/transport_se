@@ -7,8 +7,8 @@
 #PBS -e err_ne120_$PBS_JOBID
 
 # Be sure to change MPI/threads here and NCPU/NTHREADS below
-#XXX -l mppwidth=960
-#PBS -l mppwidth=10800
+#PBS -l mppwidth=960
+#XXX -l mppwidth=10800
 
 #_______________________________________________________________________
 #
@@ -17,7 +17,7 @@
 #  1) Edit the path to the configuration script, if necessary
 #  2) Submit this script to the queue or execute it an interactive session
 #_______________________________________________________________________
-set NCPU     = 10800      # number of CPUs to use
+set NCPU     = 960        # number of CPUs to use
 set NTHREADS = 1          # number of openMP threads per MPI task
 set NCPU_PER_NODE = 24     # number of MPI tasks per node
 
