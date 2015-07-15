@@ -54,7 +54,7 @@
   output_frequency = 6                              ! interval between outputs
   output_varnames1 = 'Q','Q3','geo'                 ! tracers Q2 and Q4 are suppressed for this test
   output_type      ='netcdf'                        ! netcdf or pnetcdf
-  io_stride        = 8
+  num_io_procs     = 16
 /
 &prof_inparm
   profile_outpe_num   = 512

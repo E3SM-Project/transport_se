@@ -50,7 +50,7 @@
  output_frequency = 12,                           ! interval between outputs
  output_varnames1 = 'Q2','geo'                    ! variables to write to file
  output_type      ='netcdf'                       ! netcdf or pnetcdf
- io_stride        = 8
+ num_io_procs     = 16
 /
 &prof_inparm
   profile_outpe_num   = 512
