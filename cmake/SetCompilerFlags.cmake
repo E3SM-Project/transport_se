@@ -154,7 +154,7 @@ ENDIF ()
 ##############################################################################
 OPTION(ENABLE_OPENMP "OpenMP across elements" TRUE)
 OPTION(ENABLE_HORIZ_OPENMP "OpenMP across elements" TRUE)
-OPTION(ENABLE_COLUMN_OPENMP "OpenMP within an element" FALSE)
+OPTION(ENABLE_COLUMN_OPENMP "OpenMP within an element" TRUE)
 
 # If OpenMP is turned off also turn off ENABLE_HORIZ_OPENMP
 IF (NOT ${ENABLE_OPENMP}) 
@@ -172,6 +172,9 @@ IF (ENABLE_HORIZ_OPENMP OR ENABLE_COLUMN_OPENMP)
       # inaccessible from the timing CMake script
       IF (CMAKE_Fortran_COMPILER_ID STREQUAL XL)
         SET(OpenMP_C_FLAGS "-qsmp=omp")
+        IF (ENABLE_COLUMN_OPENMP)
+          SET(OpenMP_C_FLAGS "-qsmp=omp:nested_par")
+        ENDIF ()
       ENDIF ()
       SET(OpenMP_Fortran_FLAGS "${OpenMP_C_FLAGS}")
       MESSAGE(STATUS "OpenMP_Fortran_FLAGS: ${OpenMP_Fortran_FLAGS}")

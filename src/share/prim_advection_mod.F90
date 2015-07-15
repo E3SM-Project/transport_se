@@ -804,7 +804,7 @@ contains
 
     ! advance Qdp
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss)
+!$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss,tmp1,tmp2)
 #endif
     do q = 1 , qsize
       do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
