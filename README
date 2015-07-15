@@ -28,6 +28,23 @@ run_ne120_perf.sh   Test case for performance testing
                       output disabled.  most diagnostics disabled
 
 
+Recommendations:
+
+   Step 1. Use "run_ne8_test.sh" to get the code up and running
+
+   Step 2. Use "run_ne30_test.sh" to verify the results are correct.  L1, L2
+   and Linf errors, overshoot and undershoots should agree to 2-3
+   digits.  One should also check that the tracer mass is conserved by
+   looking at the "Q, Q diss" values in the stdout.  For additional
+   verification, compare the PDF plots of the solution with reference
+   plots on the ACME confluence page, "Transport Mini-app Setup and
+   Test Results"
+
+   The results should be BFB when run on different numbers of MPI
+   tasks and/or openMP threads.  We should add a test for this.
+
+   Step 3. Use "run_ne120_perf.sh" as a starting point for performance testing.  
+
 
 
 __________________________________________________________________________________________________________________
@@ -51,9 +68,9 @@ On Darwin:
   DCMIP 1-1: L1=0.529721 L2= 0.637360 Linf= 0.616721 q_max= 0.459436 q_min= -2.246253e-08
   DCMIP 1-2: L1=0.386038 L2= 0.556077 Linf= 0.914060 q_max= 0.987405 q_min= -2.642738e-06
 
-demeshko branch:
-DCMIP 1-1: L1=0.5296765931896794 L2= 0.6373114826521099 Linf= 0.6169685961326221 q_max= 0.4597013819836047 q_min= -1.582270183305788e-07
-DCMIP 1-2: L1=0.3860385668475824 L2= 0.556071142459956 Linf= 0.9140604100376123 q_max= 0.987388944800639 q_min= -2.778264490706714e-06
+Updated 2015-7-14 (new direct addressing limiter)
+  DCMIP 1-1: L1=0.529676 L2= 0.637311 Linf= 0.616969 q_max= 0.459701 q_min= -9.78542e-09
+  DCMIP 1-2: L1=0.386039 L2= 0.556071 Linf= 0.91406 q_max= 0.987389 q_min= -2.77826e-06
 
 
 
@@ -75,6 +92,9 @@ With rsplit limiter=8 (monotone limiter) on Edison
   DCMIP 1-1: L1=0.138421  L2= 0.202415 Linf= 0.298503 q_max= 0.974222 q_min= -7.4405e-14
   DCMIP 1-2: L1=0.0578899 L2= 0.123954 Linf= 0.270832 q_max= 0.979736 q_min= -1.26331e-12
 
+Updated 2015-7-14 (new direct addressing limiter)
+  DCMIP 1-1: L1=0.138438  L2= 0.202473 Linf= 0.298522 q_max= 0.974238 q_min= -7.27863e-14
+  DCMIP 1-2: L1=0.0578902 L2= 0.123954 Linf= 0.270832 q_max= 0.979733 q_min= -4.54058e-14
 
 
 __________________________________________________________________________________________________________________
@@ -87,8 +107,15 @@ With rsplit limiter=8 (monotone limiter) on Edison
   DCMIP1-1 prim_run   960   960   4.423680e+06  2.117038e+06  2205.253 (  709     0)  2205.234 (  259     0)
   DCMIP1-2 prim_run   960   960   3.686400e+05  1.279739e+05   133.365 (  662     0)  133.245  (  443     0)
 
-  DCMIP 1-1: L1=0.0794909 L2= 0.139211 Linf= 0.306975 q_max= 0.984071 q_min= -1.84532e-13
+  DCMIP 1-1: L1=0.0794909 L2= 0.139211  Linf= 0.306975 q_max= 0.984071 q_min= -1.84532e-13
   DCMIP 1-2: L1=0.0363203 L2= 0.0987049 Linf= 0.277493 q_max= 0.994146 q_min= -5.89671e-14
+
+Updated 2015-7-14 (new direct addressing limiter)
+  DCMIP 1-1: L1=0.0794911 L2= 0.139212  Linf= 0.30697  q_max= 0.984063 q_min= -1.76014e-13
+  DCMIP 1-2: L1=0.0363203 L2= 0.0987048 Linf= 0.277493 q_max= 0.994146 q_min= -5.06671e-14
+
+
+
 
 __________________________________________________________________________________________________________________
 
