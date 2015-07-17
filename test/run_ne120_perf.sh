@@ -1,131 +1,129 @@
 #!/bin/tcsh
 #PBS -q debug
-#PBS -A acme
-#PBS -l walltime=00:20:00
-#PBS -j oe
-#PBS -o out_ne120_$PBS_JOBID
-#PBS -e err_ne120_$PBS_JOBID
-
-# Be sure to change MPI/threads here and NCPU/NTHREADS below
+#PBS -l walltime=0:10:00
 #PBS -l mppwidth=960
-#XXX -l mppwidth=10800
+#PBS -j oe
+#PBS -o out_ne120_perf_$PBS_JOBID
+#PBS -e err_ne120_perf_$PBS_JOBID
+
+# Runs DCMIP 1-1 with NE=120 for 1 simulated hour and measures run times.
 
 #_______________________________________________________________________
-#
-# This file executes a set of DCMIP test to verify tracer perfrormance
-#
-#  1) Edit the path to the configuration script, if necessary
-#  2) Submit this script to the queue or execute it an interactive session
-#_______________________________________________________________________
-set NCPU     = 960        # number of CPUs to use
-set NTHREADS = 1          # number of openMP threads per MPI task
-set NCPU_PER_NODE = 24     # number of MPI tasks per node
+# call configure script to ensure executable exists
 
-
-set NE       = 120        # number of elements per cube-edge
-set TSTEP    = 75         # timestep size
-set NU       = 1e13       # hyperviscosity coefficient
-set QSIZE1 = 50  
-set CONFIGURE_DIR = ../../
-
-
-# diagnostic output every 2day
-set statefreq = 48     
-@ statefreq *= 3600
-@ statefreq /= $TSTEP
-
-
-# Run length (hours) for DCMIP1-1
-# 288h (12 days) needed for verification.  expensive!
-# 6h is probably good for performance testing.  
-#set nhours = 288
-set nhours = 1
-
-# convert to timesteps
-set nmax = $nhours
-@ nmax *= 3600
-@ nmax /= $TSTEP
-
-# edison has 2 sockets per node
-set NUM_NUMA = $NCPU_PER_NODE
-@ NUM_NUMA /= 2
-
-
-
-#_______________________________________________________________________
-# get path variables from configure script:
+set CONFIGURE_DIR = ../..     # location of configure script
 
 if ($?PBS_O_WORKDIR) then
   cd $PBS_O_WORKDIR
 endif
-
 cd ${CONFIGURE_DIR}; source configure.sh
-# override RUN_DIR, so we can que multiple runs at once:
-set RUN_DIR = ${RUN_DIR}_$$
-
-# override default RUN_COMMAND set in configure.sh
-set RUN_COMMAND="aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node "
-echo RUN_COMMAND:
-echo $RUN_COMMAND
-
-
-
-
-
-set TEST1_DIR = $BLD_DIR/test/dcmip1-1  # test case directory
-set VCOORD    = $REPO/test/vcoord       # location of vertical coordinate files
 
 #_______________________________________________________________________
-# create directory for simulation output
+# set test parameters
 
+set HTHREADS  = 1              # number of horizontal threads
+set VTHREADS  = 1              # number of vertical threads (column_omp)
+
+set NE        = 120            # number of elements per cube-edge
+set TSTEP     = 75             # time step size, in second
+set NU        = 1e13           # hyperviscosity coefficient
+set QSIZE     = 50             # number of tracers
+set NHOURS    = 1              # total simulation time
+
+set TEST_NAME = run_ne120_perf # name of test for run directory
+
+#_______________________________________________________________________
+# compute run parameters from number of procs and number of threads
+
+if ( ${?PBS_NP} == 0) then
+  set PBS_NP = 24;                                # set default NP
+endif
+@ NUM_NODES     = $PBS_NP / 24                    # compute number of nodes from mppwidth
+@ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
+@ NCPU          = $NUM_NODES * 24 / $NTHREADS     # get total number of MPI procs
+@ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
+@ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
+@ statefreq     = 48 * 3600 / $TSTEP              # set diagnostic display frequency
+@ nmax          = $NHOURS * 3600 / $TSTEP         # get max number of timesteps
+
+set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+
+setenv OMP_NTHREADS $NTHREADS
+
+echo "PBS_NP        = $PBS_NP"
+echo "NUM_NODES     = $NUM_NODES"
+echo "NTHREADS      = $NTHREADS"
+echo "NUM_CPU       = $NCPU"
+echo "NCPU_PER_NODE = $NCPU_PER_NODE"
+echo "NUM_NUMA      = $NUM_NUMA"
+echo "statefreq     = $statefreq"
+
+#_______________________________________________________________________
+# check for some common errors
+
+set OMP_STATUS        = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_OPENMP        | grep TRUE`
+set COLUMN_OMP_STATUS = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_COLUMN_OPENMP | grep TRUE`
+
+if( $NTHREADS > 1 && ${%OMP_STATUS} == 0 ) then
+  echo "Error: NTHREADS > 1 requires ENABLE_OPENMP=TRUE"; exit
+endif
+
+if( $VTHREADS > 1 && ${%COLUMN_OMP_STATUS} == 0 ) then
+  echo "Error: VTHREADS > 1 requires ENABLE_COLUMN_OPENMP=TRUE"; exit
+endif
+
+#_______________________________________________________________________
+# create directories for simulation output
+
+if ( ${?PBS_JOBID} == 0) then
+  set PBS_JOBID=`date "+%y%m%d%H%M%S"`
+endif
+
+set RUN_DIR = $WORK/${TEST_NAME}_$PBS_JOBID
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
-cp -a $VCOORD vcoord
+cp -a $REPO/test/vcoord vcoord
 
-
+echo "RUN_DIR: $RUN_DIR"
 
 #_______________________________________________________________________
 # create namelist for DCMIP test 1-1
-cd $TEST1_DIR
-sed s/NE.\*/$NE/ dcmip1-1.nl          |\
-sed s/TIME_STEP.\*/$TSTEP/            |\
-sed s/statefreq.\*/statefreq=$statefreq/        |\
-sed s/ndays.\*/nmax=$nmax/            |\
-sed s/qsize.\*/qsize=$QSIZE1/          |\
-sed s/output_frequency.\*/output_frequency=0/          |\
-sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE120.nl
 
+set TEST1_DIR  = $BLD_DIR/test/dcmip1-1
+
+cd $TEST1_DIR
+sed s/NE.\*/$NE/ dcmip1-1.nl                    |\
+sed s/TIME_STEP.\*/$TSTEP/                      |\
+sed s/statefreq.\*/statefreq=$statefreq/        |\
+sed s/ndays.\*/nmax=$nmax/                      |\
+sed s/qsize.\*/qsize=$QSIZE/                    |\
+sed s/rsplit.\*/rsplit=1/                       |\
+sed s/NThreads.\*/NThreads=$HTHREADS/           |\
+sed s/vert_NTHREADS.\*/vert_NTHREADS=$VTHREADS/ |\
+sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
 
 #_______________________________________________________________________
 # launch the executable
 
 cd $RUN_DIR
-setenv OMP_NUM_THREADS $NTHREADS
-setenv OMP_STACKSIZE 64M   
 date
 
 # run dcmip test 1-1
-echo "executing dcmip test 1-1"
-echo "${RUN_COMMAND}  $EXE < dcmip1-1_NE120.nl"
-${RUN_COMMAND}  $EXE < dcmip1-1_NE120.nl
+echo "${RUN_COMMAND} $EXE < dcmip1-1.nl"
+${RUN_COMMAND} $EXE < dcmip1-1.nl
 if($status) exit
-mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE120
+
 date
 
-
 # print timing info
-cat HommeTime_stats_DCMIP1-1_NE120 | grep walltotal
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_run`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_advance_exp`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_advec_tracers`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep vertical_remap`"
+cat HommeTime_stats | grep walltotal
+echo "DCMIP1-1 `cat HommeTime_stats | grep prim_run`"
+echo "DCMIP1-1 `cat HommeTime_stats | grep prim_advance_exp`"
+echo "DCMIP1-1 `cat HommeTime_stats | grep prim_advec_tracers`"
+echo "DCMIP1-1 `cat HommeTime_stats | grep vertical_remap`"
 echo
 
-
-
 exit
-
 
 
 

@@ -7,70 +7,51 @@
 #  2) Edit the user-defined path variables and parameters below
 #  3) Execute this script
 #
-#  note: this script is also used by test/run_tracer_tests.sh
+#  note: this script is also called by scripts in the test/ dir
 #_______________________________________________________________________
 
 echo "Please edit this file to specify user defined parameters"; exit # delete this line
 
-# USER-DEFINED PARAMETERS:
+# set USER-DEFINED PARAMETERS:
 
 module load cmake netcdf hdf5 ncl                 # load required modules
 
-set REPO=$HOME/CODE/transport_se                  # transport_se repository
-set WORK=$cwd                                     # work directory for building and running
-set MACH=$REPO/cmake/machineFiles/edison.cmake    # machine specific cmake file
-
+set REPO=$HOME/CODE/transport_se                  # set transport_se repository
+set WORK=$cwd                                     # set work directory for building and running
+set MACH=$REPO/cmake/machineFiles/edison.cmake    # set machine specific cmake file
 
 # if you change these, remove the executable to force this script to reconfigure
-set QSIZE_D=50                                    # max number of tracers (array size)
-set QSIZE=4                                       # number of tracers to run (default)
-set NLEV=64                                       # number of vertical levels
-
-set RUN_COMMAND="aprun -n"                        # command to launch parallel executable
-#set RUN_COMMAND="mpirun -np"
+set QSIZE_D = 50                                  # set max number of tracers (array size)
+set NLEV    = 64                                  # set number of vertical levels
 
 echo "REPO=$REPO"
 echo "WORK=$WORK"
 
 #_______________________________________________________________________
-# check for some common errors
-
-@ err=0
-
-if ($cwd == $REPO) then
-  echo "please copy this script to your build directory"
-  @ err=$err + 1
-endif
-
-if (! -f $MACH  ) then
-  echo "machine file not found: $MACH"
-  @ err=$err + 1
-endif
-
-if(`where ncl` == "") then
-  echo "ncl command not found"
-  @ err=$err + 1
-endif
-
-if($err > 0) exit
-
-#_______________________________________________________________________
-# script derived parameters
+# set script derived parameters
 
 set BLD_DIR   = $WORK/bld                         # build directory
-set RUN_DIR   = $WORK/run                         # run directory
 set EXE       = $BLD_DIR/src/preqx/preqx          # location of executable
 
 #_______________________________________________________________________
-# configure
-#
-#   for a debug configuration add these flags:
-#     -DCMAKE_BUILD_TYPE=Debug \
-#     -DCMAKE_Fortran_FLAGS_DEBUG="-g -O0 -fbounds-check" \
-#
+# check for common errors
+
+if ($cwd == $REPO) then
+  echo "please copy this script to your build directory"; exit
+endif
+
+if (! -f $MACH  ) then
+  echo "machine file not found: $MACH"; exit
+endif
+
+if(`where ncl` == "") then
+  echo "ncl command not found"; exit
+endif
+
+#_______________________________________________________________________
+# configure transport_se
 
 mkdir -p $BLD_DIR
-mkdir -p $RUN_DIR
 cd $BLD_DIR
 
 if ( -f $EXE  ) then
@@ -85,13 +66,14 @@ else
    -DPREQX_PLEV=$NLEV           \
    -DPREQX_NP=4                 \
    -DENABLE_OPENMP=TRUE         \
+   -DENABLE_COLUMN_OPENMP=FALSE \
    $REPO
 
   make -j8 clean
 endif
 
 #_______________________________________________________________________
-# build
+# build the executable
 
 echo "compiling the transport_se executable"
 make -j8 preqx

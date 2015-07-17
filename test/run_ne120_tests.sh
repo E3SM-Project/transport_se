@@ -1,120 +1,141 @@
 #!/bin/tcsh
 #PBS -q debug
-#PBS -A acme
-#PBS -l walltime=00:30:00
-#PBS -j oe
-#PBS -o out_ne120_$PBS_JOBID
-#PBS -e err_ne120_$PBS_JOBID
-
-# Be sure to change MPI/threads here and NCPU/NTHREADS below
+#PBS -l walltime=0:30:00
 #PBS -l mppwidth=1440
+#PBS -j oe
+#PBS -o out_ne120_tests_$PBS_JOBID
+#PBS -e err_ne120_tests_$PBS_JOBID
+
+# Runs DCMIP 1-1 and 1-2 and plots results
 
 #_______________________________________________________________________
-#
-# This file executes a set of DCMIP test to verify tracer perfrormance
-#
-#  1) Edit the path to the configuration script, if necessary
-#  2) Submit this script to the queue or execute it an interactive session
-#_______________________________________________________________________
+# call configure script to ensure executable exists
 
-set NE       = 120        # number of elements per cube-edge
-set NCPU     = 1440       # number of CPUs to use
-set NTHREADS = 1          # number of openMP threads
-set TSTEP    = 75         # timestep size
-set NU       = 1e13       # hyperviscosity coefficient
-set CONFIGURE_DIR = ../../
-
-
-# diagnostic output every day
-set statefreq = 24
-@ statefreq *= 3600
-@ statefreq /= $TSTEP
-
-
-# Run length (hours) for DCMIP1-1
-# 288h (12 days) needed for verification.  expensive!
-# 6h is probably good for performance testing.  
-set nhours = 288
-#set nhours = 1
-
-# convert to timesteps
-set nmax = $nhours
-@ nmax *= 3600
-@ nmax /= $TSTEP
-
-
-
-#_______________________________________________________________________
-# get path variables from configure script:
+set CONFIGURE_DIR = ../..      # location of configure script
 
 if ($?PBS_O_WORKDIR) then
   cd $PBS_O_WORKDIR
 endif
-
 cd ${CONFIGURE_DIR}; source configure.sh
 
-set QSIZE1 = $QSIZE
-#set QSIZE1 = 50  # override default set in configure.sh
-set QSIZE2 = $QSIZE
+#_______________________________________________________________________
+# set test parameters
 
+set HTHREADS  = 1              # number of horizontal threads
+set VTHREADS  = 1              # number of vertical threads (column_omp)
 
-set TEST1_DIR = $BLD_DIR/test/dcmip1-1  # test case directory
-set TEST2_DIR = $BLD_DIR/test/dcmip1-2  # test case directory
-set VCOORD    = $REPO/test/vcoord       # location of vertical coordinate files
+set NE        = 120            # number of elements per cube-edge
+set TSTEP     = 75             # time step size, in second
+set NU        = 1e13           # hyperviscosity coefficient
+set QSIZE     = 4              # number of tracers
+
+set TEST_NAME = run_ne30_tests # name of test for run directory
 
 #_______________________________________________________________________
-# create directory for simulation output
+# compute run parameters from number of procs and number of threads
 
+if ( ${?PBS_NP} == 0) then
+  set PBS_NP = 24;                                # set default NP
+endif
+@ NUM_NODES     = $PBS_NP / 24                    # compute number of nodes from mppwidth
+@ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
+@ NCPU          = $NUM_NODES * 24 / $NTHREADS     # get total number of MPI procs
+@ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
+@ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
+@ statefreq     = 24 * 3600 / $TSTEP              # set diagnostic display frequency
+
+set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA"
+
+setenv OMP_NTHREADS $NTHREADS
+
+echo "PBS_NP        = $PBS_NP"
+echo "NUM_NODES     = $NUM_NODES"
+echo "NTHREADS      = $NTHREADS"
+echo "NUM_CPU       = $NCPU"
+echo "NCPU_PER_NODE = $NCPU_PER_NODE"
+echo "NUM_NUMA      = $NUM_NUMA"
+echo "statefreq     = $statefreq"
+
+#_______________________________________________________________________
+# check for some common errors
+
+set OMP_STATUS        = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_OPENMP        | grep TRUE`
+set COLUMN_OMP_STATUS = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_COLUMN_OPENMP | grep TRUE`
+
+if( $NTHREADS > 1 && ${%OMP_STATUS} == 0 ) then
+  echo "Error: NTHREADS > 1 requires ENABLE_OPENMP=TRUE"; exit
+endif
+
+if( $VTHREADS > 1 && ${%COLUMN_OMP_STATUS} == 0 ) then
+  echo "Error: VTHREADS > 1 requires ENABLE_COLUMN_OPENMP=TRUE"; exit
+endif
+
+#_______________________________________________________________________
+# create directories for simulation output
+
+if ( ${?PBS_JOBID} == 0) then
+  set PBS_JOBID=`date "+%y%m%d%H%M%S"`
+endif
+
+set RUN_DIR = $WORK/${TEST_NAME}_$PBS_JOBID
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
-cp -a $VCOORD vcoord
 
+cp -a $REPO/test/vcoord vcoord
 
+echo "RUN_DIR: $RUN_DIR"
 
 #_______________________________________________________________________
 # create namelist for DCMIP test 1-1
+
+set TEST1_DIR  = $BLD_DIR/test/dcmip1-1
+
 cd $TEST1_DIR
-sed s/NE.\*/$NE/ dcmip1-1.nl          |\
-sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/NE.\*/$NE/ dcmip1-1.nl                    |\
+sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
-sed s/ndays.\*/nmax=$nmax/            |\
-sed s/qsize.\*/qsize=$QSIZE1/          |\
-sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1_NE120.nl
+sed s/qsize.\*/qsize=$QSIZE/                    |\
+sed s/rsplit.\*/rsplit=1/                       |\
+sed s/NThreads.\*/NThreads=$HTHREADS/           |\
+sed s/vert_NTHREADS.\*/vert_NTHREADS=$VTHREADS/ |\
+sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
 
 #_______________________________________________________________________
 # create namelist for DCMIP test 1-2
+
+set TEST2_DIR  = $BLD_DIR/test/dcmip1-2
+
 cd $TEST2_DIR
-sed s/NE.\*/$NE/ dcmip1-2.nl          |\
-sed s/TIME_STEP.\*/$TSTEP/            |\
+sed s/NE.\*/$NE/ dcmip1-2.nl                    |\
+sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
-sed s/qsize.\*/qsize=$QSIZE2/          |\
-sed s/NThreads.\*/NThreads=$NTHREADS/ |\
-sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2_NE120.nl
+sed s/qsize.\*/qsize=$QSIZE/                    |\
+sed s/rsplit.\*/rsplit=1/                       |\
+sed s/NThreads.\*/NThreads=$NTHREADS/           |\
+sed s/vert_NTHREADS.\*/vert_NTHREADS=$VTHREADS/ |\
+sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2.nl
 
 #_______________________________________________________________________
 # launch the executable
 
 cd $RUN_DIR
-setenv OMP_NUM_THREADS $NTHREADS
 date
 
 # run dcmip test 1-1
 echo "executing dcmip test 1-1"
-echo "${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE120.nl"
-${RUN_COMMAND}  $NCPU $EXE < dcmip1-1_NE120.nl
+echo "${RUN_COMMAND} $EXE < dcmip1-1.nl"
+${RUN_COMMAND} $EXE < dcmip1-1.nl
 if($status) exit
-mv HommeTime_stats HommeTime_stats_DCMIP1-1_NE120
+mv HommeTime_stats HommeTime_stats_DCMIP1-1
 date
 
 # run dcmip test 1-2
 echo "executing dcmip test 1-2"
-echo "${RUN_COMMAND} $NCPU $EXE < dcmip1-2_NE120.nl"
-${RUN_COMMAND}  $NCPU $EXE < dcmip1-2_NE120.nl
+echo "${RUN_COMMAND} $EXE < dcmip1-2.nl"
+${RUN_COMMAND} $EXE < dcmip1-2.nl
 if($status) exit
-mv HommeTime_stats HommeTime_stats_DCMIP1-2_NE120
+mv HommeTime_stats HommeTime_stats_DCMIP1-2
 date
-
 
 # plot results
 echo
@@ -126,29 +147,19 @@ ncl dcmip1-1_lat_lon_ng.ncl
 ncl dcmip1-2_lat_height_ng.ncl
 
 # print timing info
-cat HommeTime_stats_DCMIP1-1_NE120 | grep walltotal
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_run`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_advance_exp`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep prim_advec_tracers`"
-echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1_NE120 | grep vertical_remap`"
+cat HommeTime_stats_DCMIP1-2 | grep walltotal
+echo "DCMIP1-1 `cat HommeTime_stats_DCMIP1-1 | grep prim_run`"
+echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2 | grep prim_run`"
 echo
-echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE120 | grep prim_run`"
-echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE120 | grep prim_advance_exp`"
-echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE120 | grep prim_advec_tracers`"
-echo "DCMIP1-2 `cat HommeTime_stats_DCMIP1-2_NE120 | grep vertical_remap`"
-echo
-
-
 
 # print error norms
 cp $TEST1_DIR/dcmip1-1_error_norm_ng.ncl .
 cp $TEST2_DIR/dcmip1-2_error_norm_ng.ncl .
-ncl dcmip1-1_error_norm_ng.ncl  | tail -n 1
-ncl dcmip1-2_error_norm_ng.ncl  | tail -n 1
+ncl dcmip1-1_error_norm_ng.ncl | tail -n 1
+ncl dcmip1-2_error_norm_ng.ncl | tail -n 1
 echo
 
 exit
-
 
 
 

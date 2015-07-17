@@ -1,5 +1,6 @@
 &ctl_nl
   NThreads      = 1
+  vert_num_threads  = 1
   partmethod    = 4
   topology      = "cube"                  ! initial mesh type
   test_case     = "dcmip1-2"
