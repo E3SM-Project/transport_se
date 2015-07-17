@@ -46,7 +46,7 @@ endif
 
 set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
 
-setenv OMP_NTHREADS $NTHREADS
+setenv OMP_NUM_THREADS $NTHREADS
 
 echo "PBS_NP        = $PBS_NP"
 echo "NUM_NODES     = $NUM_NODES"
