@@ -1,12 +1,13 @@
 #!/bin/tcsh
-#PBS -q debug
+#PBS -q regular
 #PBS -l walltime=0:05:00
-#PBS -l mppwidth=384
+#PBS -l mppwidth=21600
 #PBS -j oe
-#PBS -o out_ne8_perf_$PBS_JOBID
-#PBS -e err_ne8_perf_$PBS_JOBID
+#PBS -o out_ne30_perf_$PBS_JOBID
+#PBS -e err_ne30_perf_$PBS_JOBID
 
-# Runs DCMIP 1-1 with NE=8 and analyzes run times.
+# Runs DCMIP 1-1 with NE=30 for a few model hours and measures run times.
+# mppwdith = (Ne*Ne*6)*threads_per_colum = 30*30*6*4 = 21600
 
 #_______________________________________________________________________
 # call configure script to ensure executable exists
@@ -21,15 +22,16 @@ cd ${CONFIGURE_DIR}; source configure.sh
 #_______________________________________________________________________
 # set test parameters
 
-set HTHREADS  = 4             # number of horizontal threads
-set VTHREADS  = 1             # number of vertical threads (column_omp)
+set HTHREADS  = 1              # number of horizontal threads
+set VTHREADS  = 4              # number of vertical threads (column_omp)
 
-set NE        = 8             # number of elements per cube-edge
-set TSTEP     = 1200          # time step size, in second
-set NU        = 6e16          # hyperviscosity coefficient
-set QSIZE     = 50            # number of tracers
+set NE        = 30             # number of elements per cube-edge
+set TSTEP     = 300            # time step size, in second
+set NU        = 1e15           # hyperviscosity coefficient
+set QSIZE     = 50             # number of tracers
+set NHOURS    = 144            # total simulation time (12 days)
 
-set TEST_NAME = run_ne8_perf  # name of test for run directory
+set TEST_NAME = run_ne30_perf  # name of test for run directory
 
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
@@ -43,8 +45,10 @@ endif
 @ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
 @ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
 @ statefreq     = 144 * 3600 / $TSTEP             # set diagnostic display frequency
+@ nmax          = $NHOURS * 3600 / $TSTEP         # get max number of timesteps
 
-set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+#set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc cpu"
 
 setenv OMP_NUM_THREADS $NTHREADS
 
@@ -80,7 +84,6 @@ endif
 set RUN_DIR = $WORK/${TEST_NAME}_$PBS_JOBID
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
-
 cp -a $REPO/test/vcoord vcoord
 
 echo "RUN_DIR: $RUN_DIR"
@@ -94,6 +97,7 @@ cd $TEST1_DIR
 sed s/NE.\*/$NE/ dcmip1-1.nl                    |\
 sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
+sed s/ndays.\*/nmax=$nmax/                      |\
 sed s/qsize.\*/qsize=$QSIZE/                    |\
 sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
@@ -125,10 +129,6 @@ echo
 cp $TEST1_DIR/dcmip1-1_error_norm_ng.ncl .
 ncl dcmip1-1_error_norm_ng.ncl | tail -n 1
 echo
-
-# produce plot of results
-cp $TEST1_DIR/dcmip1-1_lat_lon_ng.ncl .
-ncl dcmip1-1_lat_lon_ng.ncl
 
 exit
 

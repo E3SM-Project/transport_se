@@ -99,7 +99,7 @@ sed s/ndays.\*/nmax=$nmax/                      |\
 sed s/qsize.\*/qsize=$QSIZE/                    |\
 sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
-sed s/vert_NTHREADS.\*/vert_NTHREADS=$VTHREADS/ |\
+sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
 
 #_______________________________________________________________________
