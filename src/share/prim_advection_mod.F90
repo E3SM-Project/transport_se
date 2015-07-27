@@ -670,7 +670,7 @@ contains
   real(kind=real_kind) :: dp0
   real(kind=real_kind) :: tmp1(nlev),tmp2(nlev)
   integer :: ie,q,i,j,k
-  integer :: rhs_viss = 0
+  integer :: rhs_viss
 
 #if USE_CUDA_FORTRAN
   call euler_step_cuda( np1_qdp , n0_qdp , dt , elem , hvcoord , hybrid , deriv , nets , nete , DSSopt , rhs_multiplier )
