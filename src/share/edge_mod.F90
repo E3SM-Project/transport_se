@@ -682,26 +682,16 @@ contains
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
 
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
-#endif
     do i=1,np
-       ! East
-       do k=1,vlyr
-          v(np ,i  ,k) = v(np ,i  ,k)+edge%buf(kptr+k,ie+i  )
-       end do
-       ! South
-       do k=1,vlyr
-          v(i  ,1  ,k) = v(i  ,1  ,k)+edge%buf(kptr+k,is+i  )
-       end do
-       ! North
-       do k=1,vlyr
-          v(i  ,np ,k) = v(i  ,np ,k)+edge%buf(kptr+k,in+i  )
-       end do
-       ! West
-       do k=1,vlyr
-          v(1  ,i  ,k) = v(1  ,i  ,k)+edge%buf(kptr+k,iw+i  )
-       end do
+#if (defined COLUMN_OPENMP)
+      !$omp parallel do private(k)
+#endif
+      do k=1,vlyr
+        v(np ,i  ,k) = v(np ,i  ,k)+edge%buf(kptr+k,ie+i  ) ! East
+        v(i  ,1  ,k) = v(i  ,1  ,k)+edge%buf(kptr+k,is+i  ) ! South
+        v(i  ,np ,k) = v(i  ,np ,k)+edge%buf(kptr+k,in+i  ) ! North
+        v(1  ,i  ,k) = v(1  ,i  ,k)+edge%buf(kptr+k,iw+i  ) ! West
+      end do
     end do
 
 ! SWEST
