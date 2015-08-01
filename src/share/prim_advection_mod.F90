@@ -918,17 +918,20 @@ contains
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
 !-----------------------------------------------------------------------------
-
   subroutine limiter_optim_iter_full(ptens,sphweights,minp,maxp,dpmass)
-    !THIS IS A NEW VERSION OF LIM8, POTENTIALLY FASTER BECAUSE INCORPORATES KNOWLEDGE FROM
-    !PREVIOUS ITERATIONS
-
+    ! 
     !The idea here is the following: We need to find a grid field which is closest
     !to the initial field (in terms of weighted sum), but satisfies the min/max constraints.
     !So, first we find values which do not satisfy constraints and bring these values
     !to a closest constraint. This way we introduce some mass change (addmass),
     !so, we redistribute addmass in the way that l2 error is smallest.
     !This redistribution might violate constraints thus, we do a few iterations.
+    !
+    ! O. Guba ~2012                    Documented in Guba, Taylor & St-Cyr, JCP 2014
+    ! I. Demeshko & M. Taylor 7/2015:  Removed indirect addressing.  
+    ! N. Lopez & M. Taylor 8/2015:     Mass redistributon tweak which is better at 
+    !                                  linear coorelation preservation
+    !
     use kinds         , only : real_kind
     use dimensions_mod, only : np, np, nlev
 
@@ -938,10 +941,10 @@ contains
     real (kind=real_kind), dimension(np,np), intent(in)   :: sphweights
 
     real (kind=real_kind), dimension(np,np) :: ptens_mass
-    integer  k1, k, i, j, iter
+    integer  k1, k, i, j, iter, weightsnum
     real (kind=real_kind) :: addmass, weightssum, mass, sumc
     real (kind=real_kind) :: x(np*np),c(np*np)
-    integer :: maxiter = np*np-2
+    integer :: maxiter = np*np-1
     real (kind=real_kind) :: tol_limiter = 5e-14
 
  
@@ -992,26 +995,31 @@ contains
        if(abs(addmass)<=tol_limiter*abs(mass)) exit
 
        weightssum=0.0d0
+!       weightsnum=0
        if(addmass>0)then
         do k1=1,np*np
           if(x(k1)<maxp(k))then
             weightssum=weightssum+c(k1)
+!            weightsnum=weightsnum+1
           endif
         enddo !k1
         do k1=1,np*np
           if(x(k1)<maxp(k))then
               x(k1)=x(k1)+addmass/weightssum
+!              x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
         enddo
       else
         do k1=1,np*np
           if(x(k1)>minp(k))then
             weightssum=weightssum+c(k1)
+!            weightsnum=weightsnum+1
           endif
         enddo
         do k1=1,np*np
           if(x(k1)>minp(k))then
             x(k1)=x(k1)+addmass/weightssum
+!           x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
         enddo
       endif
