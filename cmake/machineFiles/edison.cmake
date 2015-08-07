@@ -14,4 +14,4 @@ SET (ADD_Fortran_FLAGS "-fast" CACHE STRING "")
 # intel: Fortran Flags =  -assume byterecl -fp-model precise -ftz -O3 -openmp -fast
 
 # for debugging:
-#SET (FORCE_Fortran_FLAGS "-traceback -openmp -ftz -g -O1" CACHE STRING "")
+# SET (FORCE_Fortran_FLAGS "-traceback -fbounds-check -openmp -ftz -g -O1" CACHE STRING "")

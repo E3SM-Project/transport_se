@@ -91,7 +91,6 @@ contains
 
     integer total_nelem
     real(kind=real_kind) :: approx_elements_per_task
-    integer :: n_domains
 
     logical :: repro_sum_use_ddpdd, repro_sum_recompute
     real(kind=real_kind) :: repro_sum_rel_diff_max
@@ -230,17 +229,9 @@ contains
     allocate(global_shared_buf(nelemd,nrepro_vars))
     global_shared_buf=0.0_real_kind
 
-    call syncmp(par)
-
-    ! Set number of domains (for 'decompose') equal to number of threads
-    ! for OpenMP across elements, equal to 1 for OpenMP within element
-
-    n_domains = min(Nthreads,nelemd)
-
     ! Initialize boundary_exchange and reduction buffers
-
     if(par%masterproc) write(iulog,*) 'init shared boundary_exchange buffers'
-    call InitReductionBuffer(red,3*nlev,n_domains)
+    call InitReductionBuffer(red,3*nlev,Nthreads)
     call InitReductionBuffer(red_sum,5)
     call InitReductionBuffer(red_sum_int,1)
     call InitReductionBuffer(red_max,1)
@@ -354,20 +345,13 @@ contains
     deallocate(TailPartition)
     deallocate(HeadPartition)
 
-    n_domains = min(Nthreads,nelemd)
-    call omp_set_num_threads(n_domains)
-
     ! Set number of threads
 
-    if(par%masterproc) then
-       write(iulog,*) "Main:NThreads=",NThreads
-       write(iulog,*) "Main:n_domains = ",n_domains
-    endif
-
-    allocate(dom_mt(0:n_domains-1))
-    do ith=0,n_domains-1
-       dom_mt(ith)=decompose(1,nelemd,n_domains,ith)
+    allocate(dom_mt(0:nthreads-1))
+    do ith=0,Nthreads-1
+      dom_mt(ith)=decompose(1,nelemd,nthreads,ith)
     end do
+
     ith=0
     nets=1
     nete=nelemd
@@ -375,7 +359,7 @@ contains
     ! Initialize prim_advance, prim_advec, hyperviscosity
 
     call prim_advance_init(par,integration)
-    call Prim_Advec_Init1(par, n_domains)
+    call Prim_Advec_Init1(par, Nthreads)
     call diffusion_init(par)
 
     ! Allocate memory for subcell flux calculations.
