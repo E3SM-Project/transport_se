@@ -366,20 +366,20 @@ contains
   ! =========================================
   subroutine edgeVpack(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np, max_corner_elem
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
 
-
-
-    type (EdgeBuffer_t)                      :: edge
-    integer,              intent(in)   :: vlyr
-    real (kind=real_kind),intent(in)   :: v(np,np,vlyr)
-    integer,              intent(in)   :: kptr
+    type (EdgeBuffer_t)                :: edge
+    integer,                intent(in) :: vlyr
+    real (kind=real_kind),  intent(in) :: v(np,np,vlyr)
+    integer,                intent(in) :: kptr
     type (EdgeDescriptor_t),intent(in) :: desc
 
     ! Local variables
-    integer :: i,k,ir,ll
+    integer :: i,k,is,ie,in,iw,sw,se,nw,ne,kk
 
-    integer :: is,ie,in,iw
+    if (edge%nlyr < (kptr+vlyr) ) then
+       call haltmp('edgeVpack: Buffer overflow: size of the vertical dimension must be increased!')
+    endif
 
     call t_adj_detailf(+2)
     call t_startf('edge_pack')
@@ -394,143 +394,143 @@ contains
     ie = desc%putmapP(east)
     in = desc%putmapP(north)
     iw = desc%putmapP(west)
-    if (edge%nlyr < (kptr+vlyr) ) then
-       call haltmp('edgeVpack: Buffer overflow: size of the vertical dimension must be increased!')
-    endif
+
+    if(MODULO(np,4) == 0) then 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
+!$omp parallel do private(k,i,kk)
 #endif
-    do i=1,np
-       ! East
        do k=1,vlyr
-          edge%buf(kptr+k,ie+i)   = v(np ,i ,k)
-       enddo
-       ! South
+          kk=kptr+k
+          do i=1,np,4
+             edge%buf(kk,is+i)   = v(i  ,1  ,k)  
+             edge%buf(kk,is+i+1) = v(i+1,1  ,k)  
+             edge%buf(kk,is+i+2) = v(i+2,1  ,k)  
+             edge%buf(kk,is+i+3) = v(i+3,1  ,k)  
+             edge%buf(kk,ie+i)   = v(np ,i  ,k)  
+             edge%buf(kk,ie+i+1) = v(np ,i+1,k)
+             edge%buf(kk,ie+i+2) = v(np ,i+2,k)
+             edge%buf(kk,ie+i+3) = v(np ,i+3,k)
+             edge%buf(kk,in+i)   = v(i  ,np ,k)
+             edge%buf(kk,in+i+1) = v(i+1,np ,k)
+             edge%buf(kk,in+i+2) = v(i+2,np ,k)
+             edge%buf(kk,in+i+3) = v(i+3,np ,k)
+             edge%buf(kk,iw+i)   = v(1  ,i  ,k)  
+             edge%buf(kk,iw+i+1) = v(1  ,i+1,k)
+             edge%buf(kk,iw+i+2) = v(1  ,i+2,k)
+             edge%buf(kk,iw+i+3) = v(1  ,i+3,k)
+          enddo
+       end do
+    else
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,kk)
+#endif
        do k=1,vlyr
-          edge%buf(kptr+k,is+i)   = v(i  ,1 ,k)
-       enddo
-       ! North
-       do k=1,vlyr
-          edge%buf(kptr+k,in+i)   = v(i  ,np,k)
-       enddo
-       ! West
-       do k=1,vlyr
-          edge%buf(kptr+k,iw+i)   = v(1  ,i ,k)
-       enddo
-    end do
+          kk=kptr+k
+          do i=1,np
+             edge%buf(kk,is+i)   = v(i  ,1 ,k) ! South
+             edge%buf(kk,ie+i)   = v(np ,i ,k) ! East
+             edge%buf(kk,in+i)   = v(i  ,np,k) ! North
+             edge%buf(kk,iw+i)   = v(1  ,i ,k) ! West
+          enddo
+       end do
+    endif
 
     !  This is really kludgy way to setup the index reversals
     !  But since it is so a rare event not real need to spend time optimizing
 
     if(desc%reverse(south)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,ir)
+!$omp parallel do private(k,i)
 #endif
-       do i=1,np
-          ir = np-i+1
-          do k=1,vlyr
-             edge%buf(kptr+k,is+ir)=v(i,1,k)
+       do k=1,vlyr
+          do i=1,np
+             edge%buf(kptr+k,is+np-i+1)=v(i,1,k)
           enddo
        enddo
     endif
 
     if(desc%reverse(east)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,ir)
+!$omp parallel do private(k,i)
 #endif
-       do i=1,np
-          ir = np-i+1
-          do k=1,vlyr
-             edge%buf(kptr+k,ie+ir)=v(np,i,k)
+       do k=1,vlyr
+          do i=1,np
+             edge%buf(kptr+k,ie+np-i+1)=v(np,i,k)
           enddo
        enddo
     endif
 
     if(desc%reverse(north)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,ir)
+!$omp parallel do private(k,i)
 #endif
-       do i=1,np
-          ir = np-i+1
-          do k=1,vlyr
-             edge%buf(kptr+k,in+ir)=v(i,np,k)
+       do k=1,vlyr
+          do i=1,np
+             edge%buf(kptr+k,in+np-i+1)=v(i,np,k)
           enddo
        enddo
     endif
 
     if(desc%reverse(west)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,ir)
+!$omp parallel do private(k,i)
 #endif
-       do i=1,np
-          ir = np-i+1
-          do k=1,vlyr
-             edge%buf(kptr+k,iw+ir)=v(1,i,k)
+       do k=1,vlyr
+          do i=1,np
+             edge%buf(kptr+k,iw+np-i+1)=v(1,i,k)
           enddo
        enddo
     endif
 
-! SWEST
-    do ll=swest,swest+max_corner_elem-1
-        if (desc%putmapP(ll) /= -1) then
-            do k=1,vlyr
-                edge%buf(kptr+k,desc%putmapP(ll)+1)=v(1  ,1 ,k)
-            end do
-        end if
-    end do
 
-! SEAST
-    do ll=swest+max_corner_elem,swest+2*max_corner_elem-1
-        if (desc%putmapP(ll) /= -1) then
-            do k=1,vlyr
-                edge%buf(kptr+k,desc%putmapP(ll)+1)=v(np ,1 ,k)
-            end do
-        end if
-    end do
+    ! Copy the 4 corners
+    sw = desc%putmapP(swest)
+    se = desc%putmapP(seast)
+    ne = desc%putmapP(neast)
+    nw = desc%putmapP(nwest)
 
-! NEAST
-    do ll=swest+3*max_corner_elem,swest+4*max_corner_elem-1
-        if (desc%putmapP(ll) /= -1) then
-            do k=1,vlyr
-                edge%buf(kptr+k,desc%putmapP(ll)+1)=v(np ,np,k)
-            end do
-        end if
-    end do
-
-! NWEST
-    do ll=swest+2*max_corner_elem,swest+3*max_corner_elem-1
-        if (desc%putmapP(ll) /= -1) then
-            do k=1,vlyr
-                edge%buf(kptr+k,desc%putmapP(ll)+1)=v(1  ,np,k)
-            end do
-        end if
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k)
+#endif
+    do k=1,vlyr
+       kk=kptr+k
+       if (sw /= -1) then
+          edge%buf(kk,sw+1)=v(1 ,1 ,k) ! SWEST
+       end if
+       if (se /= -1) then
+          edge%buf(kk,se+1)=v(np,1 ,k) ! SEAST
+       end if
+       if (ne /= -1) then
+          edge%buf(kk,ne+1)=v(np,np,k) ! NEAST
+       end if
+       if (nw /= -1) then
+          edge%buf(kk,nw+1)=v(1 ,np,k) ! NWEST
+       end if
     end do
 
     call t_stopf('edge_pack')
     call t_adj_detailf(-2)
-
   end subroutine edgeVpack
+
+
   ! =========================================
   ! LongEdgeVpack:
   !
   ! Pack edges of v into buf...
   ! =========================================
   subroutine LongEdgeVpack(edge,v,vlyr,kptr,desc)
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
     use dimensions_mod, only : np, max_corner_elem
 
     type (LongEdgeBuffer_t)            :: edge
-    integer,              intent(in)   :: vlyr
-    integer (kind=int_kind),intent(in)   :: v(np,np,vlyr)
-    integer,              intent(in)   :: kptr
+    integer,                intent(in) :: vlyr
+    integer (kind=int_kind),intent(in) :: v(np,np,vlyr)
+    integer,                intent(in) :: kptr
     type (EdgeDescriptor_t),intent(in) :: desc
 
     ! Local variables
     logical, parameter :: UseUnroll = .TRUE.
-
-    integer :: i,k,ir,l
-
-    integer :: is,ie,in,iw
+    integer :: i,k,ir,l,is,ie,in,iw
 
     if(.not. threadsafe) then
 #if (defined HORIZ_OPENMP)
@@ -547,15 +547,14 @@ contains
     if(MODULO(np,2) == 0 .and. UseUnroll) then 
        do k=1,vlyr
           do i=1,np,2
-             edge%buf(kptr+k,is+i)   = v(i  ,1 ,k)
-             edge%buf(kptr+k,is+i+1) = v(i+1,1 ,k)
-             edge%buf(kptr+k,ie+i)   = v(np ,i ,k)
-             edge%buf(kptr+k,ie+i+1) = v(np ,i+1 ,k)
-             edge%buf(kptr+k,in+i)   = v(i  ,np,k)
-             edge%buf(kptr+k,in+i+1) = v(i+1  ,np,k)
-             edge%buf(kptr+k,iw+i)   = v(1  ,i ,k)
-             edge%buf(kptr+k,iw+i+1) = v(1  ,i+1 ,k)
-
+             edge%buf(kptr+k,is+i)   = v(i  ,1  ,k)
+             edge%buf(kptr+k,is+i+1) = v(i+1,1  ,k)
+             edge%buf(kptr+k,ie+i)   = v(np ,i  ,k)
+             edge%buf(kptr+k,ie+i+1) = v(np ,i+1,k)
+             edge%buf(kptr+k,in+i)   = v(i  ,np ,k)
+             edge%buf(kptr+k,in+i+1) = v(i+1,np ,k)
+             edge%buf(kptr+k,iw+i)   = v(1  ,i  ,k)
+             edge%buf(kptr+k,iw+i+1) = v(1  ,i+1,k)
           enddo
        end do
     else
@@ -567,13 +566,10 @@ contains
              edge%buf(kptr+k,iw+i)   = v(1  ,i ,k)
           enddo
        end do
-
     endif
-
 
     !  This is really kludgy way to setup the index reversals
     !  But since it is so a rare event not real need to spend time optimizing
-
     if(desc%reverse(south)) then
        is = desc%putmapP(south)
        do k=1,vlyr
@@ -614,7 +610,8 @@ contains
        enddo
     endif
 
-! SWEST
+    ! Corners
+    ! SWEST
     do l=swest,swest+max_corner_elem-1
         if (desc%putmapP(l) /= -1) then
             do k=1,vlyr
@@ -623,7 +620,7 @@ contains
         end if
     end do
 
-! SEAST
+    ! SEAST
     do l=swest+max_corner_elem,swest+2*max_corner_elem-1
         if (desc%putmapP(l) /= -1) then
             do k=1,vlyr
@@ -632,7 +629,7 @@ contains
         end if
     end do
 
-! NEAST
+    ! NEAST
     do l=swest+3*max_corner_elem,swest+4*max_corner_elem-1
         if (desc%putmapP(l) /= -1) then
             do k=1,vlyr
@@ -641,7 +638,7 @@ contains
         end if
     end do
 
-! NWEST
+    ! NWEST
     do l=swest+2*max_corner_elem,swest+3*max_corner_elem-1
         if (desc%putmapP(l) /= -1) then
             do k=1,vlyr
@@ -649,29 +646,26 @@ contains
             end do
         end if
     end do
-
-
   end subroutine LongEdgeVpack
+
 
   ! ========================================
   ! edgeVunpack:
   !
   ! Unpack edges from edge buffer into v...
   ! ========================================
-
   subroutine edgeVunpack(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np, max_corner_elem
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
-    type (EdgeBuffer_t),         intent(in)  :: edge
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
 
-    integer,               intent(in)  :: vlyr
+    type (EdgeBuffer_t),   intent(in)    :: edge
+    integer,               intent(in)    :: vlyr
     real (kind=real_kind), intent(inout) :: v(np,np,vlyr)
-    integer,               intent(in)  :: kptr
-    type (EdgeDescriptor_t)            :: desc
+    integer,               intent(in)    :: kptr
+    type (EdgeDescriptor_t)              :: desc
 
     ! Local
-    integer :: i,k,ll
-    integer :: is,ie,in,iw
+    integer :: i,k,is,ie,in,iw,sw,se,ne,nw,kk
 
     call t_adj_detailf(+2)
     call t_startf('edge_unpack')
@@ -682,58 +676,77 @@ contains
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
 
-    do i=1,np
+    if(MODULO(np,4) == 0) then 
 #if (defined COLUMN_OPENMP)
-      !$omp parallel do private(k)
+!$omp parallel do private(k,i,kk)
 #endif
-      do k=1,vlyr
-        v(np ,i  ,k) = v(np ,i  ,k)+edge%buf(kptr+k,ie+i  ) ! East
-        v(i  ,1  ,k) = v(i  ,1  ,k)+edge%buf(kptr+k,is+i  ) ! South
-        v(i  ,np ,k) = v(i  ,np ,k)+edge%buf(kptr+k,in+i  ) ! North
-        v(1  ,i  ,k) = v(1  ,i  ,k)+edge%buf(kptr+k,iw+i  ) ! West
-      end do
-    end do
+       do k=1,vlyr
+          kk=kptr+k
+          do i=1,np,4
+             v(i  ,1  ,k) = v(i  ,1  ,k)+edge%buf(kk,is+i  ) ! South
+             v(i+1,1  ,k) = v(i+1,1  ,k)+edge%buf(kk,is+i+1)
+             v(i+2,1  ,k) = v(i+2,1  ,k)+edge%buf(kk,is+i+2)
+             v(i+3,1  ,k) = v(i+3,1  ,k)+edge%buf(kk,is+i+3)
+             v(np ,i  ,k) = v(np ,i  ,k)+edge%buf(kk,ie+i  ) ! East
+             v(np ,i+1,k) = v(np ,i+1,k)+edge%buf(kk,ie+i+1)
+             v(np ,i+2,k) = v(np ,i+2,k)+edge%buf(kk,ie+i+2)
+             v(np ,i+3,k) = v(np ,i+3,k)+edge%buf(kk,ie+i+3)
+             v(i  ,np ,k) = v(i  ,np ,k)+edge%buf(kk,in+i  ) ! North
+             v(i+1,np ,k) = v(i+1,np ,k)+edge%buf(kk,in+i+1)
+             v(i+2,np ,k) = v(i+2,np ,k)+edge%buf(kk,in+i+2)
+             v(i+3,np ,k) = v(i+3,np ,k)+edge%buf(kk,in+i+3)
+             v(1  ,i  ,k) = v(1  ,i  ,k)+edge%buf(kk,iw+i  ) ! West
+             v(1  ,i+1,k) = v(1  ,i+1,k)+edge%buf(kk,iw+i+1)
+             v(1  ,i+2,k) = v(1  ,i+2,k)+edge%buf(kk,iw+i+2)
+             v(1  ,i+3,k) = v(1  ,i+3,k)+edge%buf(kk,iw+i+3)
+          enddo
+       end do
+    else
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,kk)
+#endif
+       do k=1,vlyr
+         kk=kptr+k
+         do i=1,np
+           v(i ,1 ,k) = v(i ,1 ,k)+edge%buf(kk,is+i) ! South
+           v(np,i ,k) = v(np,i ,k)+edge%buf(kk,ie+i) ! East
+           v(i ,np,k) = v(i ,np,k)+edge%buf(kk,in+i) ! North
+           v(1 ,i ,k) = v(1 ,i ,k)+edge%buf(kk,iw+i) ! West
+         end do
+       end do
+    endif
 
-! SWEST
-    do ll=swest,swest+max_corner_elem-1
-        if(desc%getmapP(ll) /= -1) then 
-            do k=1,vlyr
-                v(1  ,1 ,k)=v(1 ,1 ,k)+edge%buf(kptr+k,desc%getmapP(ll)+1)
-            enddo
-        endif
-    end do
+    ! Copy the 4 corners
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
 
-! SEAST
-    do ll=swest+max_corner_elem,swest+2*max_corner_elem-1
-        if(desc%getmapP(ll) /= -1) then 
-            do k=1,vlyr
-                v(np ,1 ,k)=v(np,1 ,k)+edge%buf(kptr+k,desc%getmapP(ll)+1)
-            enddo
-        endif
-    end do
-
-! NEAST
-    do ll=swest+3*max_corner_elem,swest+4*max_corner_elem-1
-        if(desc%getmapP(ll) /= -1) then 
-            do k=1,vlyr
-                v(np ,np,k)=v(np,np,k)+edge%buf(kptr+k,desc%getmapP(ll)+1)
-            enddo
-        endif
-    end do
-
-! NWEST
-    do ll=swest+2*max_corner_elem,swest+3*max_corner_elem-1
-        if(desc%getmapP(ll) /= -1) then 
-            do k=1,vlyr
-                v(1  ,np,k)=v(1 ,np,k)+edge%buf(kptr+k,desc%getmapP(ll)+1)
-            enddo
-        endif
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,kk)
+#endif
+    do k=1,vlyr
+       kk=kptr+k
+       if (sw /= -1) then 
+          v(1 ,1 ,k)=v(1 ,1 ,k)+edge%buf(kk,sw+1) ! SWEST
+       end if
+       if (se /= -1) then 
+          v(np,1 ,k)=v(np,1 ,k)+edge%buf(kk,se+1) ! SEAST
+       end if
+       if (ne /= -1) then 
+          v(np,np,k)=v(np,np,k)+edge%buf(kk,ne+1) ! NEAST
+       end if
+       if (nw /= -1) then 
+          v(1 ,np,k)=v(1 ,np,k)+edge%buf(kk,nw+1) ! NWEST
+       end if
     end do
 
     call t_stopf('edge_unpack')
     call t_adj_detailf(-2)
-
   end subroutine edgeVunpack
+
+
+
   subroutine edgeVunpackVert(edge,v,desc)
     use control_mod, only : north, south, east, west, neast, nwest, seast, swest
     use dimensions_mod, only : np, max_corner_elem, ne
@@ -762,7 +775,6 @@ contains
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
-
 
     ! N+S
     do i=1,np/2
@@ -914,26 +926,25 @@ contains
        v(4,1,i)%y  = v(1,1,i+1)%y
        v(4,1,i)%z  = v(1,1,i+1)%z
     end do
-
   end subroutine edgeVunpackVert
+
+
   ! ========================================
   ! edgeDGVunpack:
   !
   ! Unpack edges from edge buffer into v...
   ! ========================================
-
   subroutine edgeDGVunpack(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np
-    use control_mod, only : north, south, east, west
+    use control_mod,    only : north, south, east, west
 
-    type (EdgeBuffer_t),         intent(in)  :: edge
+    type (EdgeBuffer_t),   intent(in)  :: edge
     integer,               intent(in)  :: vlyr
     real (kind=real_kind), intent(out) :: v(0:np+1,0:np+1,vlyr)
     integer,               intent(in)  :: kptr
     type (EdgeDescriptor_t)            :: desc
 
     ! Local
-
     integer :: i,k
     integer :: is,ie,in,iw
 
@@ -951,8 +962,8 @@ contains
           v(0   ,i   ,k)=edge%buf(kptr+k,iw+i)
        end do
     end do
-
   end subroutine edgeDGVunpack
+
 
   ! ========================================
   ! edgeVunpackMIN/MAX:
@@ -975,6 +986,8 @@ contains
 
     integer :: i,k,l
     integer :: is,ie,in,iw
+
+    call t_startf('edgeVunpackMAX')
 
     threadsafe=.false.
 
@@ -1027,7 +1040,11 @@ contains
         endif
     end do
     
+    call t_stopf('edgeVunpackMAX')
+
   end subroutine edgeVunpackMAX
+
+
   subroutine edgeVunpackMIN(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np, max_corner_elem
     use control_mod, only : north, south, east, west, neast, nwest, seast, swest
@@ -1043,6 +1060,8 @@ contains
 
     integer :: i,k,l
     integer :: is,ie,in,iw
+
+    call t_startf('edgeVunpackMIN')
 
     threadsafe=.false.
 
@@ -1095,6 +1114,8 @@ contains
         endif
     end do
     
+    call t_stopf('edgeVunpackMIN')
+
   end subroutine edgeVunpackMIN
   ! ========================================
   ! LongEdgeVunpackMIN:
@@ -1117,6 +1138,8 @@ contains
 
     integer :: i,k,l
     integer :: is,ie,in,iw
+
+    call t_startf('LongEdgeVunpackMIN')
 
     threadsafe=.false.
 
@@ -1168,6 +1191,8 @@ contains
             enddo
         endif
     end do
+
+    call t_stopf('LongEdgeVunpackMIN')
 
   end subroutine LongEdgeVunpackMIN
 
@@ -1249,8 +1274,7 @@ contains
           end do
 
        endif
-
-     end subroutine edgerotate
+  end subroutine edgerotate
 
      ! =============================================
      ! buffermap:
