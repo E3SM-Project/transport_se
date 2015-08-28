@@ -712,16 +712,16 @@ contains
 #endif
     do k=1,vlyr
        kk=kptr+k
-       if (sw /= -1) then 
+       if (sw /= -1) then
           v(1 ,1 ,k)=v(1 ,1 ,k)+edge%buf(kk,sw+1) ! SWEST
        end if
-       if (se /= -1) then 
+       if (se /= -1) then
           v(np,1 ,k)=v(np,1 ,k)+edge%buf(kk,se+1) ! SEAST
        end if
-       if (ne /= -1) then 
+       if (ne /= -1) then
           v(np,np,k)=v(np,np,k)+edge%buf(kk,ne+1) ! NEAST
        end if
-       if (nw /= -1) then 
+       if (nw /= -1) then
           v(1 ,np,k)=v(1 ,np,k)+edge%buf(kk,nw+1) ! NWEST
        end if
     end do
@@ -951,22 +951,19 @@ contains
   !
   ! Finds the Min/Max edges from edge buffer into v...
   ! ========================================
-
   subroutine edgeVunpackMAX(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np, max_corner_elem
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
 
-    type (EdgeBuffer_t),         intent(in)  :: edge
-    integer,               intent(in)  :: vlyr
-    real (kind=real_kind), intent(inout) :: v(np,np,vlyr)
-    integer,               intent(in)  :: kptr
-    type (EdgeDescriptor_t),intent(in) :: desc
-
+    type (EdgeBuffer_t),    intent(in)    :: edge
+    integer,                intent(in)    :: vlyr
+    real (kind=real_kind),  intent(inout) :: v(np,np,vlyr)
+    integer,                intent(in)    :: kptr
+    type (EdgeDescriptor_t),intent(in)    :: desc
 
     ! Local
-
-    integer :: i,k,l
-    integer :: is,ie,in,iw
+    integer :: i,k,kk
+    integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('edgeVunpackMAX')
 
@@ -974,71 +971,59 @@ contains
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,kk)
+#endif
     do k=1,vlyr
+       kk=kptr+k
        do i=1,np
-          v(i  ,1  ,k) = MAX(v(i  ,1  ,k),edge%buf(kptr+k,is+i  ))
-          v(np ,i  ,k) = MAX(v(np ,i  ,k),edge%buf(kptr+k,ie+i  ))
-          v(i  ,np ,k) = MAX(v(i  ,np ,k),edge%buf(kptr+k,in+i  ))
-          v(1  ,i  ,k) = MAX(v(1  ,i  ,k),edge%buf(kptr+k,iw+i  ))
+          v(i ,1 ,k) = MAX(v(i ,1 ,k),edge%buf(kk,is+i))
+          v(np,i ,k) = MAX(v(np,i ,k),edge%buf(kk,ie+i))
+          v(i ,np,k) = MAX(v(i ,np,k),edge%buf(kk,in+i))
+          v(1 ,i ,k) = MAX(v(1 ,i ,k),edge%buf(kk,iw+i))
        end do
     end do
 
-! SWEST
-    do l=swest,swest+max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,1 ,k)=MAX(v(1 ,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! SEAST
-    do l=swest+max_corner_elem,swest+2*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(np ,1 ,k)=MAX(v(np,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NEAST
-    do l=swest+3*max_corner_elem,swest+4*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then
-            do k=1,vlyr
-                v(np ,np,k)=MAX(v(np,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NWEST
-    do l=swest+2*max_corner_elem,swest+3*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,np,k)=MAX(v(1 ,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,kk)
+#endif
+    do k=1,vlyr
+       kk=kptr+k
+       if (sw /= -1) then
+          v(1 ,1 ,k)=MAX(v(1 ,1 ,k),edge%buf(kk,sw+1))
+       end if
+       if (se /= -1) then
+          v(np,1 ,k)=MAX(v(np,1 ,k),edge%buf(kk,se+1))
+       end if
+       if (ne /= -1) then
+          v(np,np,k)=MAX(v(np,np,k),edge%buf(kk,ne+1))
+       end if
+       if (nw /= -1) then
+          v(1 ,np,k)=MAX(v(1 ,np,k),edge%buf(kk,nw+1))
+       end if
     end do
     
     call t_stopf('edgeVunpackMAX')
-
   end subroutine edgeVunpackMAX
 
 
   subroutine edgeVunpackMIN(edge,v,vlyr,kptr,desc)
     use dimensions_mod, only : np, max_corner_elem
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
 
-    type (EdgeBuffer_t),         intent(in)  :: edge
-    integer,               intent(in)  :: vlyr
-    real (kind=real_kind), intent(inout) :: v(np,np,vlyr)
-    integer,               intent(in)  :: kptr
-    type (EdgeDescriptor_t),intent(in) :: desc
-
+    type (EdgeBuffer_t),    intent(in)    :: edge
+    integer,                intent(in)    :: vlyr
+    real (kind=real_kind),  intent(inout) :: v(np,np,vlyr)
+    integer,                intent(in)    :: kptr
+    type (EdgeDescriptor_t),intent(in)    :: desc
 
     ! Local
-
-    integer :: i,k,l
-    integer :: is,ie,in,iw
+    integer :: i,k,kk
+    integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('edgeVunpackMIN')
 
@@ -1046,75 +1031,64 @@ contains
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,kk)
+#endif
     do k=1,vlyr
+       kk=kptr+k
        do i=1,np
-          v(i  ,1  ,k) = MIN(v(i  ,1  ,k),edge%buf(kptr+k,is+i  ))
-          v(np ,i  ,k) = MIN(v(np ,i  ,k),edge%buf(kptr+k,ie+i  ))
-          v(i  ,np ,k) = MIN(v(i  ,np ,k),edge%buf(kptr+k,in+i  ))
-          v(1  ,i  ,k) = MIN(v(1  ,i  ,k),edge%buf(kptr+k,iw+i  ))
+          v(i ,1 ,k) = MIN(v(i ,1 ,k),edge%buf(kk,is+i))
+          v(np,i ,k) = MIN(v(np,i ,k),edge%buf(kk,ie+i))
+          v(i ,np,k) = MIN(v(i ,np,k),edge%buf(kk,in+i))
+          v(1 ,i ,k) = MIN(v(1 ,i ,k),edge%buf(kk,iw+i))
        end do
     end do
 
-! SWEST
-    do l=swest,swest+max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,1 ,k)=MIN(v(1 ,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! SEAST
-    do l=swest+max_corner_elem,swest+2*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(np ,1 ,k)=MIN(v(np,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NEAST
-    do l=swest+3*max_corner_elem,swest+4*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(np ,np,k)=MIN(v(np,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NWEST
-    do l=swest+2*max_corner_elem,swest+3*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,np,k)=MIN(v(1 ,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,kk)
+#endif
+    do k=1,vlyr
+       kk=kptr+k
+       if (sw /= -1) then
+          v(1 ,1 ,k)=MIN(v(1 ,1 ,k),edge%buf(kk,sw+1))
+       end if
+       if (se /= -1) then
+          v(np,1 ,k)=MIN(v(np,1 ,k),edge%buf(kk,se+1))
+       end if
+       if (ne /= -1) then
+          v(np,np,k)=MIN(v(np,np,k),edge%buf(kk,ne+1))
+       end if
+       if (nw /= -1) then
+          v(1 ,np,k)=MIN(v(1 ,np,k),edge%buf(kk,nw+1))
+       end if
     end do
     
     call t_stopf('edgeVunpackMIN')
-
   end subroutine edgeVunpackMIN
+
+
   ! ========================================
   ! LongEdgeVunpackMIN:
   !
   ! Finds the Min edges from edge buffer into v...
   ! ========================================
-
   subroutine LongEdgeVunpackMIN(edge,v,vlyr,kptr,desc)
-    use control_mod, only : north, south, east, west, neast, nwest, seast, swest
+    use control_mod,    only : north, south, east, west, neast, nwest, seast, swest
     use dimensions_mod, only : np, max_corner_elem
 
-    type (LongEdgeBuffer_t),         intent(in)  :: edge
-    integer,               intent(in)  :: vlyr
+    type (LongEdgeBuffer_t), intent(in)    :: edge
+    integer,                 intent(in)    :: vlyr
     integer (kind=int_kind), intent(inout) :: v(np,np,vlyr)
-    integer,               intent(in)  :: kptr
-    type (EdgeDescriptor_t),intent(in) :: desc
-
+    integer,                 intent(in)    :: kptr
+    type (EdgeDescriptor_t), intent(in)    :: desc
 
     ! Local
-
-    integer :: i,k,l
-    integer :: is,ie,in,iw
+    integer :: i,k,kk
+    integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('LongEdgeVunpackMIN')
 
@@ -1122,54 +1096,45 @@ contains
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,i,kk)
+#endif
     do k=1,vlyr
+       kk=kptr+k
        do i=1,np
-          v(i  ,1  ,k) = MIN(v(i  ,1  ,k),edge%buf(kptr+k,is+i  ))
-          v(np ,i  ,k) = MIN(v(np ,i  ,k),edge%buf(kptr+k,ie+i  ))
-          v(i  ,np ,k) = MIN(v(i  ,np ,k),edge%buf(kptr+k,in+i  ))
-          v(1  ,i  ,k) = MIN(v(1  ,i  ,k),edge%buf(kptr+k,iw+i  ))
+          v(i ,1 ,k) = MIN(v(i ,1 ,k),edge%buf(kk,is+i))
+          v(np,i ,k) = MIN(v(np,i ,k),edge%buf(kk,ie+i))
+          v(i ,np,k) = MIN(v(i ,np,k),edge%buf(kk,in+i))
+          v(1 ,i ,k) = MIN(v(1 ,i ,k),edge%buf(kk,iw+i))
        end do
     end do
 
-! SWEST
-    do l=swest,swest+max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,1 ,k)=MIN(v(1 ,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! SEAST
-    do l=swest+max_corner_elem,swest+2*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(np ,1 ,k)=MIN(v(np,1 ,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NEAST
-    do l=swest+3*max_corner_elem,swest+4*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(np ,np,k)=MIN(v(np,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
-    end do
-
-! NWEST
-    do l=swest+2*max_corner_elem,swest+3*max_corner_elem-1
-        if(desc%getmapP(l) /= -1) then 
-            do k=1,vlyr
-                v(1  ,np,k)=MIN(v(1 ,np,k),edge%buf(kptr+k,desc%getmapP(l)+1))
-            enddo
-        endif
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
+#if (defined COLUMN_OPENMP)
+!$omp parallel do private(k,kk)
+#endif
+    do k=1,vlyr
+       kk=kptr+k
+       if (sw /= -1) then
+          v(1 ,1 ,k)=MIN(v(1 ,1 ,k),edge%buf(kk,sw+1))
+       end if
+       if (se /= -1) then
+          v(np,1 ,k)=MIN(v(np,1 ,k),edge%buf(kk,se+1))
+       end if
+       if (ne /= -1) then
+          v(np,np,k)=MIN(v(np,np,k),edge%buf(kk,ne+1))
+       end if
+       if (nw /= -1) then
+          v(1 ,np,k)=MIN(v(1 ,np,k),edge%buf(kk,nw+1))
+       end if
     end do
 
     call t_stopf('LongEdgeVunpackMIN')
-
   end subroutine LongEdgeVunpackMIN
+
 
   ! =============================
   ! edgerotate:
@@ -1291,27 +1256,27 @@ End module edge_mod
 ! such as cray.  if that is the case, try compiling with -DHAVE_F2003_PTR_BND_REMAP
 !
 subroutine remap_2D_ptr_buf(edge,nlyr,nbuf,src_array)
-use edge_mod, only       : EdgeBuffer_t ! _EXTERNAL                                                   
-use kinds, only          : real_kind
-! input                                                                                               
-type (EdgeBuffer_t) :: edge
-integer :: nlyr,nbuf
-real(kind=real_kind) , target :: src_array(nlyr,nbuf)
+  use edge_mod, only : EdgeBuffer_t ! _EXTERNAL
+  use kinds,    only : real_kind
+  ! input
+  type (EdgeBuffer_t)           :: edge
+  integer                       :: nlyr,nbuf
+  real(kind=real_kind) , target :: src_array(nlyr,nbuf)
 
-edge%buf  => src_array
+  edge%buf  => src_array
 
 end subroutine remap_2D_ptr_buf
 
-subroutine remap_2D_ptr_receive(edge,nlyr,nbuf,src_array)
-use edge_mod, only       : EdgeBuffer_t ! _EXTERNAL                                                   
-use kinds, only          : real_kind
-! input                                                                                               
-type (EdgeBuffer_t) :: edge
-integer :: nlyr,nbuf
-real(kind=real_kind) , target :: src_array(nlyr,nbuf)
 
-edge%receive  => src_array
+subroutine remap_2D_ptr_receive(edge,nlyr,nbuf,src_array)
+  use edge_mod, only : EdgeBuffer_t ! _EXTERNAL
+  use kinds,    only : real_kind
+  ! input
+  type (EdgeBuffer_t)           :: edge
+  integer                       :: nlyr,nbuf
+  real(kind=real_kind) , target :: src_array(nlyr,nbuf)
+
+  edge%receive => src_array
 
 end subroutine remap_2D_ptr_receive
-
 #endif
