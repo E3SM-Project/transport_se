@@ -115,7 +115,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   real(kind=real_kind), dimension(       nlev+1 ) :: masso  !Accumulate mass up to each interface
   real(kind=real_kind), dimension(  1-gs:nlev+gs) :: ao     !Tracer value on old grid
   real(kind=real_kind), dimension(  1-gs:nlev+gs) :: dpo    !change in pressure over a cell for old grid
-  real(kind=real_kind), dimension(  1-gs:nlev+gs) :: dpn    !change in pressure over a cell for old grid
   real(kind=real_kind), dimension(3,     nlev   ) :: coefs  !PPM coefficients within each cell
   real(kind=real_kind), dimension(       nlev   ) :: z1, z2
   real(kind=real_kind) :: ppmdx(10,0:nlev+1)  !grid spacings
@@ -125,7 +124,7 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   call t_startf('remap_Q_ppm')
 #if (defined COLUMN_OPENMP)
     !$omp parallel do collapse(2) &
-    !$omp& private(pio,pin,masso,ao,dpo,dpn,coefs,z1,z2,ppmdx,mymass,massn1,massn2,i,j,k,q,kk,kid)
+    !$omp& private(pio,pin,masso,ao,dpo,coefs,z1,z2,ppmdx,mymass,massn1,massn2,i,j,k,q,kk,kid)
 #endif
   do j = 1 , nx
     do i = 1 , nx
@@ -133,9 +132,8 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
       pin(1)=0
       pio(1)=0
       do k=1,nlev
-         dpn(k)=dp2(i,j,k)
          dpo(k)=dp1(i,j,k)
-         pin(k+1)=pin(k)+dpn(k)
+         pin(k+1)=pin(k)+dp2(i,j,k)
          pio(k+1)=pio(k)+dpo(k)
       enddo
 
