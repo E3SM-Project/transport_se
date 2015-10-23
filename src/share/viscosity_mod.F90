@@ -383,7 +383,7 @@ logical var_coef1
 
    do ie=nets,nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q, lap_p)
+!$omp parallel do collapse(2) private(k, q, lap_p)
 #endif
       do q=1,qsize      
       do k=1,nlev    !  Potential loop inversion (AAM)
@@ -415,7 +415,7 @@ logical var_coef1
 
       ! apply inverse mass matrix, then apply laplace again
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q, lap_p)
+!$omp parallel do collapse(2) private(k, q, lap_p)
 #endif
       do q=1,qsize      
         do k=1,nlev    !  Potential loop inversion (AAM)
@@ -763,7 +763,7 @@ real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
     ! compute Qmin, Qmax
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q)
+!$omp parallel do collapse(2) private(k, q)
 #endif
        do q=1,qsize
           do k=1,nlev
@@ -779,7 +779,7 @@ real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
        
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q)
+!$omp parallel do collapse(2) private(k, q)
 #endif
        do q=1,qsize
           do k=1,nlev         
@@ -791,7 +791,7 @@ real (kind=real_kind) :: Qmax(np,np,nlev,qsize)
        call edgeVunpackMin(edgeMinMax,Qmin,nlev*qsize,0,elem(ie)%desc)
        call edgeVunpackMax(edgeMinMax,Qmax,nlev*qsize,nlev*qsize,elem(ie)%desc)
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, q)
+!$omp parallel do collapse(2) private(k, q)
 #endif
        do q=1,qsize
           do k=1,nlev
