@@ -123,6 +123,10 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   integer :: i, j, k, q, kk, kid(nlev)
 
   call t_startf('remap_Q_ppm')
+#if (defined COLUMN_OPENMP)
+    !$omp parallel do collapse(2) &
+    !$omp& private(pio,pin,masso,ao,dpo,dpn,coefs,z1,z2,ppmdx,mymass,massn1,massn2,i,j,k,q,kk,kid)
+#endif
   do j = 1 , nx
     do i = 1 , nx
 
