@@ -388,9 +388,18 @@ contains
     in = desc%putmapP(north)
     iw = desc%putmapP(west)
 
+    ! Copy the 4 corners
+    sw = desc%putmapP(swest)
+    se = desc%putmapP(seast)
+    ne = desc%putmapP(neast)
+    nw = desc%putmapP(nwest)
+
+#if (defined COLUMN_OPENMP)
+    !$omp parallel private(k,i,kk)
+#endif
     if(MODULO(np,4) == 0) then 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+       !$omp do
 #endif
        do k=1,vlyr
           kk=kptr+k
@@ -415,7 +424,7 @@ contains
        end do
     else
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+       !$omp do
 #endif
        do k=1,vlyr
           kk=kptr+k
@@ -433,7 +442,7 @@ contains
 
     if(desc%reverse(south)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
+       !$omp do
 #endif
        do k=1,vlyr
           do i=1,np
@@ -444,7 +453,7 @@ contains
 
     if(desc%reverse(east)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
+       !$omp do
 #endif
        do k=1,vlyr
           do i=1,np
@@ -455,7 +464,7 @@ contains
 
     if(desc%reverse(north)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
+       !$omp do
 #endif
        do k=1,vlyr
           do i=1,np
@@ -466,7 +475,7 @@ contains
 
     if(desc%reverse(west)) then
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i)
+       !$omp do
 #endif
        do k=1,vlyr
           do i=1,np
@@ -475,15 +484,8 @@ contains
        enddo
     endif
 
-
-    ! Copy the 4 corners
-    sw = desc%putmapP(swest)
-    se = desc%putmapP(seast)
-    ne = desc%putmapP(neast)
-    nw = desc%putmapP(nwest)
-
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k)
+       !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -500,6 +502,9 @@ contains
           edge%buf(kk,nw+1)=v(1 ,np,k) ! NWEST
        end if
     end do
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
 
     call t_stopf('edge_pack')
     call t_adj_detailf(-2)
@@ -661,9 +666,18 @@ contains
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
 
+    ! Copy the 4 corners
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
+
+#if (defined COLUMN_OPENMP)
+    !$omp parallel private(k,i,kk)
+#endif
     if(MODULO(np,4) == 0) then 
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+       !$omp do
 #endif
        do k=1,vlyr
           kk=kptr+k
@@ -688,7 +702,7 @@ contains
        end do
     else
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+       !$omp do
 #endif
        do k=1,vlyr
          kk=kptr+k
@@ -701,14 +715,8 @@ contains
        end do
     endif
 
-    ! Copy the 4 corners
-    sw = desc%getmapP(swest)
-    se = desc%getmapP(seast)
-    ne = desc%getmapP(neast)
-    nw = desc%getmapP(nwest)
-
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,kk)
+    !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -725,6 +733,9 @@ contains
           v(1 ,np,k)=v(1 ,np,k)+edge%buf(kk,nw+1) ! NWEST
        end if
     end do
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
 
     call t_stopf('edge_unpack')
     call t_adj_detailf(-2)
@@ -971,8 +982,15 @@ contains
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
+
+    sw = desc%getmapP(swest)
+    se = desc%getmapP(seast)
+    ne = desc%getmapP(neast)
+    nw = desc%getmapP(nwest)
+
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+    !$omp parallel private(k,i,kk)
+    !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -984,12 +1002,8 @@ contains
        end do
     end do
 
-    sw = desc%getmapP(swest)
-    se = desc%getmapP(seast)
-    ne = desc%getmapP(neast)
-    nw = desc%getmapP(nwest)
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,kk)
+    !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -1006,6 +1020,9 @@ contains
           v(1 ,np,k)=MAX(v(1 ,np,k),edge%buf(kk,nw+1))
        end if
     end do
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
     
     call t_stopf('edgeVunpackMAX')
   end subroutine edgeVunpackMAX
@@ -1032,7 +1049,8 @@ contains
     in=desc%getmapP(north)
     iw=desc%getmapP(west)
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,i,kk)
+    !$omp parallel private(k,i,kk)
+    !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -1049,7 +1067,7 @@ contains
     ne = desc%getmapP(neast)
     nw = desc%getmapP(nwest)
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,kk)
+    !$omp do
 #endif
     do k=1,vlyr
        kk=kptr+k
@@ -1066,6 +1084,9 @@ contains
           v(1 ,np,k)=MIN(v(1 ,np,k),edge%buf(kk,nw+1))
        end if
     end do
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
     
     call t_stopf('edgeVunpackMIN')
   end subroutine edgeVunpackMIN
