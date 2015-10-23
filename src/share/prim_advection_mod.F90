@@ -725,12 +725,15 @@ contains
     ! compute element qmin/qmax
     if ( rhs_multiplier == 0 ) then
       do ie = nets , nete
-        do k = 1 , nlev
-          do q = 1 , qsize
-            qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
-            qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1 , nlev
+               qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
+               qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
+            enddo
+         enddo
       enddo
       ! update qmin/qmax based on neighbor data for lim8
       call neighbor_minmax(elem,hybrid,edgeAdvQ2,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
@@ -739,26 +742,32 @@ contains
     ! lets just reuse the old neighbor min/max, but update based on local data
     if ( rhs_multiplier == 1 ) then
       do ie = nets , nete
-        do k = 1 , nlev    !  Loop index added with implicit inversion (AAM)
-          do q = 1 , qsize
-            qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
-            qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1 , nlev
+               qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
+               qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
+            enddo
+         enddo
       enddo
-    endif
+   endif
 
     ! get niew min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
       rhs_viss = 3
       ! compute element qmin/qmax
       do ie = nets , nete
-        do k = 1  ,nlev
-          do q = 1 , qsize
-            qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
-            qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1  ,nlev
+               qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
+               qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
+            enddo
+         enddo
       enddo
 
       call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
@@ -884,7 +893,7 @@ contains
     if ( DSSopt == DSSno_var ) then
       call edgeVunpack( edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,q)
+!$omp parallel do collapse(2) private(k,q)
 #endif
       do q = 1 , qsize
         do k = 1 , nlev    !  Potential loop inversion (AAM)
@@ -894,7 +903,7 @@ contains
     else
       call edgeVunpack( edgeAdv_p1 , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
-      !$omp parallel do private(q,k)
+      !$omp parallel do collapse(2) private(q,k)
 #endif
       do q = 1 , qsize
         do k = 1 , nlev    !  Potential loop inversion (AAM)
