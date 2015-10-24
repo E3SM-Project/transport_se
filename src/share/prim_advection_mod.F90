@@ -665,12 +665,12 @@ contains
   real(kind=real_kind), dimension(np,np                       ) :: divdp, dpdiss
   real(kind=real_kind), dimension(np,np,2                     ) :: gradQ
   real(kind=real_kind), dimension(np,np,2,nlev                ) :: Vstar
-  real(kind=real_kind), dimension(np,np  ,nlev                ) :: Qtens
+  real(kind=real_kind), dimension(np,np                       ) :: Qtens
   real(kind=real_kind), dimension(np,np  ,nlev                ) :: dp,dp_star
   real(kind=real_kind), dimension(np,np  ,nlev,qsize,nets:nete) :: Qtens_biharmonic
   real(kind=real_kind), pointer, dimension(:,:,:)               :: DSSvar
   real(kind=real_kind) :: dp0
-  real(kind=real_kind) :: tmp1(nlev),tmp2(nlev)
+  real(kind=real_kind) :: tmp1, tmp2
   integer :: ie,q,i,j,k
   integer :: rhs_viss
 
@@ -815,54 +815,57 @@ contains
 
     ! advance Qdp
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss,tmp1,tmp2)
+    !$omp parallel private(q,k,gradQ,qtens,dpdiss,tmp1,tmp2)
 #endif
-    do q = 1 , qsize
-      do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
-        ! div( U dp Q),
-        gradQ(:,:,1) = Vstar(:,:,1,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        gradQ(:,:,2) = Vstar(:,:,2,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        dp_star(:,:,k) = divergence_sphere( gradQ , deriv , elem(ie) )
-        Qtens(:,:,k) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:,k)
-        ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k) = Qtens(:,:,k) + Qtens_biharmonic(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 8) then
-        do k = 1 , nlev  ! Loop index added (AAM)
+    if (limiter_option == 8) then
+#if (defined COLUMN_OPENMP)
+       !$omp do
+#endif
+       do k = 1, nlev
           ! UN-DSS'ed dp at timelevel n0+1:
           dp_star(:,:,k) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
-        enddo
+       enddo
+    endif
+#if (defined COLUMN_OPENMP)
+    !$omp do collapse(2)
+#endif
+    do q = 1, qsize
+       do k = 1, nlev
+          ! div( U dp Q),
+          gradQ(:,:,1) = Vstar(:,:,1,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          gradQ(:,:,2) = Vstar(:,:,2,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          Qtens(:,:) = divergence_sphere( gradQ , deriv , elem(ie) )
+          Qtens(:,:) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * Qtens(:,:)
+          ! optionally add in hyperviscosity computed above:
+          if ( rhs_viss /= 0 ) Qtens(:,:) = Qtens(:,:) + Qtens_biharmonic(:,:,k,q,ie)
 
-        do k=1,nlev
-           tmp1(k) = sum(Qtens(:,:,k)*elem(ie)%spheremp(:,:))
-        enddo
+          if ( limiter_option == 8) then
+#ifdef TRANSPORT_SE_DEBUG
+             tmp1 = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
+#endif
 
-        ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dp_star(:,:,:) )
+             ! apply limiter to Q = Qtens / dp_star
+             call limiter_optim_iter_full( Qtens(:,:) , elem(ie)%spheremp(:,:) , qmin(k,q,ie) , &
+                  qmax(k,q,ie) , dp_star(:,:,k) )
 
-        do k=1,nlev
-           tmp2(k) = sum(Qtens(:,:,k)*elem(ie)%spheremp(:,:))
-           if (abs(tmp1(k)-tmp2(k)).gt. 1e-5 ) then
-              print *,'ie,k=',ie,k,' diff=',abs(tmp1(k)-tmp2(k))
-              print *,'sums=',tmp1(k),tmp2(k)
-           endif
-        enddo
+#ifdef TRANSPORT_SE_DEBUG
+             tmp2( = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
+             if (abs(tmp1-tmp2).gt. 1e-5 ) then
+                print *,'ie,k=',ie,k,' diff=',abs(tmp1-tmp2)
+                print *,'sums=',tmp1,tmp2
+             endif
+#endif
+          endif
 
-      endif
-
-
-
-
-      ! apply mass matrix, overwrite np1 with solution:
-      ! dont do this earlier, since we allow np1_qdp == n0_qdp
-      ! and we dont want to overwrite n0_qdp until we are done using it
-      do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k)
-      enddo
-
+          ! apply mass matrix, overwrite np1 with solution:
+          ! dont do this earlier, since we allow np1_qdp == n0_qdp
+          ! and we dont want to overwrite n0_qdp until we are done using it
+          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:)
+       enddo
     enddo
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
 
     if ( DSSopt == DSSno_var ) then
       call edgeVpack(edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
@@ -946,9 +949,9 @@ contains
     use kinds         , only : real_kind
     use dimensions_mod, only : np, np, nlev
 
-    real (kind=real_kind), dimension(nlev), intent(inout)   :: minp, maxp
-    real (kind=real_kind), dimension(np,np,nlev), intent(inout)   :: ptens
-    real (kind=real_kind), dimension(np,np,nlev), intent(in), optional  :: dpmass
+    real (kind=real_kind), intent(inout)   :: minp, maxp
+    real (kind=real_kind), dimension(np,np), intent(inout)   :: ptens
+    real (kind=real_kind), dimension(np,np), intent(in), optional  :: dpmass
     real (kind=real_kind), dimension(np,np), intent(in)   :: sphweights
 
     real (kind=real_kind), dimension(np,np) :: ptens_mass
@@ -959,19 +962,17 @@ contains
     real (kind=real_kind) :: tol_limiter = 5e-14
 
  
-    do k=1,nlev
-
      k1=1
      do i=1,np
      do j=1,np
-       c(k1)=sphweights(i,j)*dpmass(i,j,k)
-       x(k1)=ptens(i,j,k)/dpmass(i,j,k)
+       c(k1)=sphweights(i,j)*dpmass(i,j)
+       x(k1)=ptens(i,j)/dpmass(i,j)
        k1=k1+1
       enddo
      enddo
 
      sumc=sum(c)
-     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it does, dont limit
+     if (sumc <= 0 ) return   ! this should never happen, but if it does, dont limit
      mass=sum(c*x)
 
     
@@ -979,11 +980,11 @@ contains
       ! relax constraints to ensure limiter has a solution:
       ! This is only needed if runnign with the SSP CFL>1 or
       ! due to roundoff errors
-      if( mass < minp(k)*sumc ) then
-        minp(k) = mass / sumc
+      if( mass < minp*sumc ) then
+        minp = mass / sumc
       endif
-      if( mass > maxp(k)*sumc ) then
-        maxp(k) = mass / sumc
+      if( mass > maxp*sumc ) then
+        maxp = mass / sumc
       endif
 
     
@@ -993,13 +994,13 @@ contains
       addmass=0.0d0
 
        do k1=1,np*np
-         if((x(k1)>maxp(k))) then
-           addmass=addmass+(x(k1)-maxp(k))*c(k1)
-           x(k1)=maxp(k)
+         if((x(k1)>maxp)) then
+           addmass=addmass+(x(k1)-maxp)*c(k1)
+           x(k1)=maxp
          endif
-         if((x(k1)<minp(k))) then
-           addmass=addmass-(minp(k)-x(k1))*c(k1)
-           x(k1)=minp(k)
+         if((x(k1)<minp)) then
+           addmass=addmass-(minp-x(k1))*c(k1)
+           x(k1)=minp
          endif
        enddo !k1
 
@@ -1009,26 +1010,26 @@ contains
 !       weightsnum=0
        if(addmass>0)then
         do k1=1,np*np
-          if(x(k1)<maxp(k))then
+          if(x(k1)<maxp)then
             weightssum=weightssum+c(k1)
 !            weightsnum=weightsnum+1
           endif
         enddo !k1
         do k1=1,np*np
-          if(x(k1)<maxp(k))then
+          if(x(k1)<maxp)then
               x(k1)=x(k1)+addmass/weightssum
 !              x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
         enddo
       else
         do k1=1,np*np
-          if(x(k1)>minp(k))then
+          if(x(k1)>minp)then
             weightssum=weightssum+c(k1)
 !            weightsnum=weightsnum+1
           endif
         enddo
         do k1=1,np*np
-          if(x(k1)>minp(k))then
+          if(x(k1)>minp)then
             x(k1)=x(k1)+addmass/weightssum
 !           x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
@@ -1041,16 +1042,13 @@ contains
    k1=1
    do i=1,np
     do j=1,np
-      ptens(i,j,k)=x(k1)
+      ptens(i,j)=x(k1)
       k1=k1+1
     enddo
    enddo
 
-  enddo
 
-  do k=1,nlev
-    ptens(:,:,k)=ptens(:,:,k)*dpmass(:,:,k)
-  enddo
+    ptens(:,:)=ptens(:,:)*dpmass(:,:)
  
   end subroutine limiter_optim_iter_full
 
