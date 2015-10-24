@@ -548,9 +548,6 @@ contains
     integer              , intent(in   ) :: nets
     integer              , intent(in   ) :: nete
 
-    real (kind=real_kind), dimension(np,np,2     ) :: gradQ
-    real (kind=real_kind), dimension(np,np  ,nlev) :: dp_star
-    real (kind=real_kind), dimension(np,np  ,nlev) :: dp_np1
     integer :: i,j,k,l,ie,q,nmin
     integer :: nfilt,rkstage,rhs_multiplier
     integer :: n0_qdp, np1_qdp
@@ -573,15 +570,13 @@ contains
     !       and a DSS'ed version stored in derived%div(:,:,:,2)
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, gradQ)
+!$omp parallel do private(k)
 #endif
       do k=1,nlev
         ! div( U dp Q),
-        gradQ(:,:,1)=elem(ie)%derived%vn0(:,:,1,k)
-        gradQ(:,:,2)=elem(ie)%derived%vn0(:,:,2,k)
-        elem(ie)%derived%divdp(:,:,k) = divergence_sphere(gradQ,deriv,elem(ie))
+        elem(ie)%derived%divdp(:,:,k) = divergence_sphere(elem(ie)%derived%vn0(:,:,:,k),deriv,elem(ie))
+        elem(ie)%derived%divdp_proj(:,:,k) = elem(ie)%derived%divdp(:,:,k)
       enddo
-      elem(ie)%derived%divdp_proj(:,:,:) = elem(ie)%derived%divdp(:,:,:)
     enddo
 
     !rhs_multiplier is for obtaining dp_tracers at each stage:
