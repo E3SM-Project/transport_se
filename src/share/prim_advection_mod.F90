@@ -844,7 +844,7 @@ contains
                   qmax(k,q,ie) , dp_star(:,:,k) )
 
 #ifdef TRANSPORT_SE_DEBUG
-             tmp2( = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
+             tmp2 = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
              if (abs(tmp1-tmp2).gt. 1e-5 ) then
                 print *,'ie,k=',ie,k,' diff=',abs(tmp1-tmp2)
                 print *,'sums=',tmp1,tmp2
