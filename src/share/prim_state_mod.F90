@@ -232,8 +232,10 @@ contains
 
        tmin_local(ie)    = MINVAL(elem(ie)%state%T(:,:,:,n0))
 
-       if (rsplit>0) &
+       if (rsplit>0) then
             dpmin_local(ie)    = MINVAL(elem(ie)%state%dp3d(:,:,:,n0))
+            dpmax_local(ie)    = MAXVAL(elem(ie)%state%dp3d(:,:,:,n0))
+       endif
 
        Ftmin_local(ie)    = MINVAL(elem(ie)%derived%FT(:,:,:,pnm1))
        Fqmin_local(ie) = MINVAL(elem(ie)%derived%FQ(:,:,:,1,pnm1))
