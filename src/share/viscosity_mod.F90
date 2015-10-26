@@ -402,6 +402,9 @@ logical var_coef1
    call bndry_exchangeV(hybrid,edgeq)
    
    do ie=nets,nete
+#if (defined COLUMN_OPENMP)
+      !$omp parallel do private(k, q)
+#endif
       do q=1,qsize      
       do k=1,nlev
          Qmin(:,:,k,q)=emin(k,q,ie)  ! restore element data.  we could avoid
