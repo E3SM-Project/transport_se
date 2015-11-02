@@ -8,7 +8,9 @@ module mesh_mod
   use physical_constants, only : DD_PI
   use control_mod, only : MAX_FILE_LEN
 
+#if defined(_NETCDF) || defined(_PNETCDF)
   use netcdf ! _EXTERNAL
+#endif
 
   implicit none
   logical, public           :: MeshUseMeshFile = .false.
@@ -82,6 +84,7 @@ module mesh_mod
 
 contains
 
+#if defined(_NETCDF) || defined(_PNETCDF)
 !======================================================================
 !  subroutine handle_error
 !======================================================================
@@ -335,6 +338,91 @@ contains
     status = nf90_get_var(p_ncid, var_id, p_node_coordinates)
     if(status /= nf90_NoErr) call handle_error(status, __FILE__, __LINE__)
   end subroutine get_node_coordinates
+#else
+  subroutine nonf()
+    use parallel_mod, only : abortmp
+    implicit none
+    call abortmp('Built without Netcdf')
+  end subroutine nonf
+
+  subroutine handle_error (status, file, line)
+    implicit none
+    integer,            intent(in) :: status
+    character (len=*),  intent(in) :: file
+    integer,            intent(in) :: line
+    call nonf()
+  end subroutine handle_error
+
+  subroutine open_mesh_file() 
+    implicit none
+    MeshUseMeshFile = .false.
+    call nonf()
+  end subroutine open_mesh_file
+
+  subroutine close_mesh_file() 
+    implicit none    
+    call nonf()
+  end subroutine close_mesh_file
+
+  function get_number_of_dimensions() result(number_dimensions)
+    implicit none
+    integer              :: number_dimensions
+    number_dimensions = 0
+    call nonf()
+  end function get_number_of_dimensions
+
+  function get_number_of_elements() result(number_elements)
+    implicit none
+    integer              :: number_elements
+    number_elements = 0
+    call nonf()
+  end function get_number_of_elements
+
+  function get_number_of_nodes() result(number_nodes)
+    implicit none
+    integer              :: number_nodes
+    number_nodes = 0
+    call nonf()
+  end function get_number_of_nodes
+
+  function get_number_of_element_blocks() result(number_element_blocks)
+    implicit none
+    integer              :: number_element_blocks 
+    number_element_blocks = 0
+    call nonf()
+  end function get_number_of_element_blocks
+
+  function get_number_of_elements_per_face() result(number_elements_per_face)
+    implicit none
+    integer             :: number_elements_per_face
+    number_elements_per_face = 0
+    call nonf()
+  end function get_number_of_elements_per_face
+
+  function get_block_ids(idexo) result(block_ids)
+    implicit none
+    integer(kind=long_kind), intent(in)  :: idexo
+    integer(kind=long_kind)              :: block_ids(p_number_blocks)
+    block_ids = 0
+    call nonf()
+  end function get_block_ids
+
+  subroutine get_face_connectivity() 
+    implicit none
+    call nonf()
+  end subroutine get_face_connectivity
+
+  subroutine get_node_multiplicity(node_multiplicity) 
+    implicit none
+    integer, intent(out) :: node_multiplicity(:)
+    call nonf()
+  end subroutine get_node_multiplicity
+
+  subroutine get_node_coordinates ()
+    implicit none
+    call nonf()
+  end subroutine get_node_coordinates
+#endif
 
   ! ================================================================================
   !
