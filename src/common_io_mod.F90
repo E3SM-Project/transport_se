@@ -5,10 +5,18 @@
 module common_io_mod
   use control_mod, only : MAX_STRING_LEN         !HOMME Specific: MAX_STRING_LEN
   use pio, only : var_desc_t, file_desc_t, io_desc_t, nfsizekind=>PIO_OffSet, iosystem_desc_t, & ! _EXTERNAL
-       nf_double=>pio_double, nf_int=>pio_int, unlim_dim=>pio_unlimited, nf_noerr=>pio_noerr
+       nf_double=>pio_double, nf_int=>pio_int, &
+#if defined(_NETCDF) || defined(_PNETCDF)
+       unlim_dim=>pio_unlimited, &
+#endif
+       nf_noerr=>pio_noerr
 
   implicit none
   private
+
+#if !(defined(_NETCDF) || defined(_PNETCDF))
+  integer, parameter :: unlim_dim = -1
+#endif
 
   public :: nfsizekind, nf_noerr
 
