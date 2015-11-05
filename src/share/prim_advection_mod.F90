@@ -421,7 +421,35 @@ module prim_advection_mod
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2
   public :: vertical_remap
 
-  type (EdgeBuffer_t) :: edgeAdv, edgeAdvQ3, edgeAdv_p1, edgeAdvQ2, edgeAdv1,  edgeveloc
+#if defined HORIZ_OPENMP
+  ! Note on edge buffers with horizontal threading (defined HORIZ_OPENMP).
+  !   Previously, there was a race condition that affected horizontal
+  ! threading. At the end of euler_step, the following sequence occurs:
+  !     pack', barrier, exchange, barrier, unpack*.
+  ! There may also be a pack** at the beginning of euler_step. Depending on
+  ! rhs_multiplier, pack** may or may not be pack'. Between unpack* and pack',
+  ! there is no barrier. Hence if unpack* and pack' use the same memory, there
+  ! is a race condition on that memory.
+  !   This race condition was observed by BFB comparison of output for
+  ! dcmip1-1. Thread counts 2 to 20 were run, and the results compared against
+  ! those from ! HORIZ_OPENMP.
+  !   The solution is to introduce logic to make sure unpack* and pack' never
+  ! share buffer space. The logic has to account for the fact that pack' may or
+  ! may not be pack**. To account for these complexities, 2*(qsize + 1)*nlev
+  ! extra space is allocated if HORIZ_OPENMP. No additional space is used if !
+  ! HORIZ_OPENMP, but for code generality, two extra pointers and a module-level
+  ! integer are used even in that case.
+  integer, parameter :: n_edge_bufs = 2
+  ! Alternate between edge_Adv[_p1](0) and (1) as a function of RK2 stage.
+  ! Each horizontal thread must own this indexer.
+  !$omp threadprivate(i_edge_buf)
+#else
+  integer, parameter :: n_edge_bufs = 1
+#endif
+  integer :: i_edge_buf
+
+  type (EdgeBuffer_t) :: edgeAdvQ3, edgeAdvQ2, edgeAdv1, edgeveloc, &
+       edgeAdv(0:n_edge_bufs-1), edgeAdv_p1(0:n_edge_bufs-1)
 
   integer,parameter :: DSSeta = 1
   integer,parameter :: DSSomega = 2
@@ -446,20 +474,35 @@ contains
     ! threads. But in this case we want shared pointers.
     real(kind=real_kind), pointer :: buf_ptr(:) => null()
     real(kind=real_kind), pointer :: receive_ptr(:) => null()
+    real(kind=real_kind), pointer :: buf_horiz_0_ptr(:) => null()
+    real(kind=real_kind), pointer :: receive_horiz_0_ptr(:) => null()
+#if defined HORIZ_OPENMP
+    real(kind=real_kind), pointer :: buf_horiz_1_ptr(:) => null()
+    real(kind=real_kind), pointer :: receive_horiz_1_ptr(:) => null()    
+#endif
 
     ! this might be called with qsize=0
     ! allocate largest one first
     ! Currently this is never freed. If it was, only this first one should
     ! be freed, as only it knows the true size of the buffer.
     call initEdgeBuffer(par,edgeAdvQ3,max(nlev,qsize*nlev*3), buf_ptr, receive_ptr)  ! Qtens,Qmin, Qmax
-
-    ! remaining edge buffers can share %buf and %receive with edgeAdvQ3
-    ! (This is done through the optional 1D pointer arguments.)
-    call initEdgeBuffer(par,edgeAdv1,nlev,buf_ptr,receive_ptr)
-    call initEdgeBuffer(par,edgeAdv,qsize*nlev,buf_ptr,receive_ptr)
-    call initEdgeBuffer(par,edgeAdv_p1,qsize*nlev + nlev,buf_ptr,receive_ptr)
+    ! These two can always share the buffer space with edgeAdvQ3.
+    call initEdgeBuffer(par,edgeveloc,2*nlev,buf_ptr,receive_ptr)
     call initEdgeBuffer(par,edgeAdvQ2,qsize*nlev*2,buf_ptr,receive_ptr)  ! Qtens,Qmin, Qmax
-    call initEdgeBuffer(par,edgeveloc,2*nlev)
+    ! These two can if ! HORIZ_OPENMP.
+#if ! defined HORIZ_OPENMP
+    buf_horiz_0_ptr => buf_ptr
+    receive_horiz_0_ptr => receive_ptr
+#endif
+    call initEdgeBuffer(par,edgeAdv_p1(0),qsize*nlev + nlev, buf_horiz_0_ptr, receive_horiz_0_ptr)
+    call initEdgeBuffer(par,edgeAdv(0),qsize*nlev, buf_horiz_0_ptr, receive_horiz_0_ptr)
+#if defined HORIZ_OPENMP
+    ! These two exist only if HORIZ_OPENMP. They cannot shared space with any
+    ! other.
+    call initEdgeBuffer(par, edgeAdv_p1(1), qsize*nlev + nlev, buf_horiz_1_ptr, receive_horiz_1_ptr)
+    call initEdgeBuffer(par, edgeAdv(1), qsize*nlev, buf_horiz_1_ptr, receive_horiz_1_ptr)
+#endif
+    i_edge_buf = 0
 
     ! Don't actually want these saved, if this is ever called twice.
     nullify(buf_ptr)
@@ -863,9 +906,9 @@ contains
 #endif
 
     if ( DSSopt == DSSno_var ) then
-      call edgeVpack(edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVpack(edgeAdv(i_edge_buf)    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
     else
-      call edgeVpack(edgeAdv_p1 , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVpack(edgeAdv_p1(i_edge_buf) , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
       ! also DSS extra field
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
@@ -873,14 +916,14 @@ contains
       do k = 1 , nlev
         DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
       enddo
-      call edgeVpack( edgeAdv_p1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , elem(ie)%desc )
+      call edgeVpack( edgeAdv_p1(i_edge_buf) , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , elem(ie)%desc )
     endif
   enddo
 
   if ( DSSopt == DSSno_var ) then
-    call bndry_exchangeV( hybrid , edgeAdv    )
+    call bndry_exchangeV( hybrid , edgeAdv(i_edge_buf)    )
   else
-    call bndry_exchangeV( hybrid , edgeAdv_p1 )
+    call bndry_exchangeV( hybrid , edgeAdv_p1(i_edge_buf) )
   endif
 
   do ie = nets , nete
@@ -889,7 +932,7 @@ contains
     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
 
     if ( DSSopt == DSSno_var ) then
-      call edgeVunpack( edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVunpack( edgeAdv(i_edge_buf)    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
 !$omp parallel do collapse(2) private(k,q)
 #endif
@@ -899,7 +942,7 @@ contains
         enddo
       enddo
     else
-      call edgeVunpack( edgeAdv_p1 , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVunpack( edgeAdv_p1(i_edge_buf) , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
       !$omp parallel do collapse(2) private(q,k)
 #endif
@@ -908,13 +951,16 @@ contains
           elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
         enddo
       enddo
-      call edgeVunpack( edgeAdv_p1 , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , elem(ie)%desc )
+      call edgeVunpack( edgeAdv_p1(i_edge_buf) , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , elem(ie)%desc )
 
       do k = 1 , nlev
         DSSvar(:,:,k) = DSSvar(:,:,k) * elem(ie)%rspheremp(:,:)
       enddo
     endif
   enddo
+#if defined HORIZ_OPENMP
+  i_edge_buf = mod(i_edge_buf + 1, 2)
+#endif
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
 !$OMP BARRIER
