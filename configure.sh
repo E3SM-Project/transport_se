@@ -14,15 +14,16 @@ echo "Please edit this file to specify user defined parameters"; exit # delete t
 
 # set USER-DEFINED PARAMETERS:
 
-module load cmake netcdf hdf5 ncl                 # load required modules
+# load required modules
+module load cmake cray-hdf5-parallel cray-netcdf-hdf5parallel ncl
 
 set REPO=$HOME/CODE/transport_se                  # set transport_se repository
 set WORK=$cwd                                     # set work directory for building and running
 set MACH=$REPO/cmake/machineFiles/edison.cmake    # set machine specific cmake file
 
 # if you change these, remove the executable to force this script to reconfigure
-set QSIZE_D = 50                                  # set max number of tracers (array size)
-set NLEV    = 64                                  # set number of vertical levels
+set QSIZE_D = 35                                  # set max number of tracers (array size)
+set NLEV    = 72                                  # set number of vertical levels
 
 echo "REPO=$REPO"
 echo "WORK=$WORK"
