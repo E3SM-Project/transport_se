@@ -1,59 +1,50 @@
 #!/bin/tcsh
-#PBS -q debug
-#PBS -l walltime=0:05:00
-#PBS -l mppwidth=48
-#PBS -j oe
-#PBS -o out_ne8_tests_$PBS_JOBID
-#PBS -e err_ne8_tests_$PBS_JOBID
+#SBATCH -p debug
+#SBATCH -t 00:05:00
+#SBATCH -N 6
 
 # Runs DCMIP 1-1 and 1-2 and plots results
-
 #_______________________________________________________________________
 # call configure script to ensure executable exists
 
 set CONFIGURE_DIR = ../..     # location of configure script
-
-if ($?PBS_O_WORKDIR) then
-  cd $PBS_O_WORKDIR
-endif
 cd ${CONFIGURE_DIR}; source configure.sh
 
 #_______________________________________________________________________
 # set test parameters
 
-set HTHREADS  = 1             # number of horizontal threads
-set VTHREADS  = 1             # number of vertical threads (column_omp)
-
+set TEST_NAME = run_ne8_tests # name of test for run directory
 set NE        = 8             # number of elements per cube-edge
 set TSTEP     = 1200          # time step size, in second
 set NU        = 6e16          # hyperviscosity coefficient
 set QSIZE     = 4             # number of tracers
-
-set TEST_NAME = run_ne8_tests # name of test for run directory
+@ statefreq   = 144 * 3600 / $TSTEP            # set diagnostic display frequency
 
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
 
-if ( ${?PBS_NP} == 0) then
-  set PBS_NP = 24;                                # set default NP
-endif
-@ NUM_NODES     = $PBS_NP / 24                    # compute number of nodes from mppwidth
-@ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
-@ NCPU          = $NUM_NODES * 24 / $NTHREADS     # get total number of MPI procs
-@ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
-@ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
-@ statefreq     = 144 * 3600 / $TSTEP             # set diagnostic display frequency
-
-set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA"
-
+set HTHREADS  = 1             # number of horizontal threads
+set VTHREADS  = 1             # number of vertical threads (column_omp)
+@ NTHREADS    = $HTHREADS * $VTHREADS           # get total number of threads needed
 setenv OMP_NUM_THREADS $NTHREADS
 
-echo "PBS_NP        = $PBS_NP"
-echo "NUM_NODES     = $NUM_NODES"
+set NTASKS = 384
+set MAX_TASKS_NODE = 64
+set NNODES = $SLURM_JOB_NUM_NODES
+@ NMPI = $NNODES * $MAX_TASKS_NODE / $NTHREADS
+@ NMPI_PER_NODE = $NMPI / $NNODES              # get number of MPI procs per node
+@ NUM_NUMA      = $NMPI_PER_NODE / 2           # edison has 2 sockets per node
+
+#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+set RUN_COMMAND = "srun -n $NMPI"
+
+echo "NTASKS        = $NTASKS"
+echo "NNODES        = $NNODES"
+echo "NMPI          = $NMPI"
+echo "NMPI_PER_NODE = $NMPI_PER_NODE"
 echo "NTHREADS      = $NTHREADS"
-echo "NUM_CPU       = $NCPU"
-echo "NCPU_PER_NODE = $NCPU_PER_NODE"
-echo "NUM_NUMA      = $NUM_NUMA"
+echo "HTHREADS      = $HTHREADS"
+echo "VTHREADS      = $VTHREADS"
 echo "statefreq     = $statefreq"
 
 #_______________________________________________________________________
@@ -73,11 +64,8 @@ endif
 #_______________________________________________________________________
 # create directories for simulation output
 
-if ( ${?PBS_JOBID} == 0) then
-  set PBS_JOBID=`date "+%y%m%d%H%M%S"`
-endif
-
-set RUN_DIR = $WORK/${TEST_NAME}_$PBS_JOBID
+set JDATE=`date "+%y-%m-%d_%H%M%S"`
+set RUN_DIR = $WORK/${TEST_NAME}_$JDATE
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
 
@@ -160,7 +148,4 @@ ncl dcmip1-2_error_norm_ng.ncl | tail -n 1
 echo
 
 exit
-
-
-
 
