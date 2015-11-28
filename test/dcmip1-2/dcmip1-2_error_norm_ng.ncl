@@ -72,6 +72,8 @@ begin
   q_max = max(q_f)
   q_min = min(q_f)
   
-  print("DCMIP 1-2: L1="+L1+" L2= "+L2+" Linf= "+Linf+" q_max= "+q_max+" q_min= "+q_min)
+  print("DCMIP 1-2: L1="+sprintf("%8.6f",L1)+\
+" L2="+sprintf("%8.6f",L2)+" Linf="+sprintf("%8.6f",Linf)+\
+" q_max="+sprintf("%8.6f",q_max)+" q_min="+sprintf("%14.6e",q_min))
 
 end

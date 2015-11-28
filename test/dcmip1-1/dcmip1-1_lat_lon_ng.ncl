@@ -137,24 +137,23 @@ begin
   ; plot countours and label bar
 
   plot    = new (6, graphic)
-
-  res1@tiMainString = "q1   t=0 days "
+  res1@tiMainString = "q1 t=0 days min/max="+sprintf("%7.4f", min(q1_t0))+" "+sprintf("%7.4f", max(q1_t0))
   plot(0) = gsn_csm_contour(wks,q1_t0(:),res1)
   
-  res1@tiMainString = "q1   t=6 days"
+  res1@tiMainString = "q1 t=6 days min/max="+sprintf("%7.4f", min(q1_t1))+" "+sprintf("%7.4f", max(q1_t1))
   plot(2) = gsn_csm_contour(wks,q1_t1(:),res1)
   
-  res1@tiMainString = "q1   t=12 days"
+  res1@tiMainString = "q1 t=12 days min/max="+sprintf("%7.4f", min(q1_t2))+" "+sprintf("%7.4f", max(q1_t2))
   plot(4) = gsn_csm_contour(wks,q1_t2(:),res1)
 
   
-  res1@tiMainString = "q3   t=0 days"
+  res1@tiMainString = "q3 t=0 days min/max="+sprintf("%7.4f", min(q3_t0))+" "+sprintf("%7.4f", max(q3_t0))
   plot(1) = gsn_csm_contour(wks,q3_t0(:),res1)
     
-  res1@tiMainString = "q3   t=6 days"
+  res1@tiMainString = "q3 t=6 days min/max="+sprintf("%7.4f", min(q3_t1))+" "+sprintf("%7.4f", max(q3_t1))
   plot(3) = gsn_csm_contour(wks,q3_t1(:),res1)
 
-  res1@tiMainString = "q3   t=12 days"
+  res1@tiMainString = "q3 t=12 days min/max="+sprintf("%7.4f", min(q3_t2))+" "+sprintf("%7.4f", max(q3_t2))
   plot(5) = gsn_csm_contour(wks,q3_t2(:),res1)
 
   gsn_panel(wks,plot,(/3,2/),pres)

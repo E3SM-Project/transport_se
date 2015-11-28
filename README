@@ -11,9 +11,10 @@ To test the mini-app:
 
   4) cd ~/work/bld/test             navigate to the test directory
   5) make install                   install the namelists and test scripts
-  6) qsub run_ne8_test.sh           submit a test to the debug queue (or execute it on a laptop)
-  7) tail -n 40 ./out_ne8_jobid     examine timing and error norm results
-  8) display ~/work/run/image_*     examine plots of tracer cross-sections
+  6) vi run_ne8_test.sh             customize the mpirun command, tasks per node, etc...
+  7) qsub run_ne8_test.sh           submit a test to the debug queue (or execute it on a laptop)
+  8) tail -n 40 ./out_ne8_jobid     examine timing and error norm results
+  9) display ~/work/run/image_*     examine plots of tracer cross-sections
 
 
 Tests:
@@ -22,11 +23,13 @@ run_ne30_test.sh    1 degree test with 4 tracers for verification
 run_ne120_test.sh   1/4 degree test for additonal, optional verification at high-res
                     This test is expensive and often sits in the que for 1 day.
 
+run_ne8_perf.sh
+run_ne30_perf.sh
 run_ne120_perf.sh   Test case for performance testing
                       DCMIP1-1 for 1 hour of model time.
                       (we might have to increase run time )
                       output disabled.  most diagnostics disabled
-
+                      tracers increased to 35
 
 Recommendations:
 
@@ -46,6 +49,18 @@ Recommendations:
    Step 3. Use "run_ne120_perf.sh" as a starting point for performance testing.  
 
 
+Note: This mini-app is using DCMIP tests 1-1 and 1-2, modified to use
+the ACME 72L configuration instead of the DCMIP equally spaced levels.
+The performance characteristics will be very faithful to the HOMME
+dycore as used by ACME. However, the ACME 72L configuration has much
+larger errors since there are fewer levels where the tracers are
+located.  In addition, surface pressure is not treated correctly - for
+consistency with prescribed winds and disabled dynamics, we evolve the
+surface pressure using the implicit surface pressure from the tracer
+advection scheme.  Thus the simulation output of this mini-app should
+not be used for DCMIP test case results.
+
+
 
 __________________________________________________________________________________________________________________
 
@@ -61,7 +76,7 @@ Typical results for run_ne8_test.sh on NERSC:Hopper
   Used Resources: cput=00:00:07,energy_used=0,mem=12220kb,vmem=123196kb,walltime=00:01:29
 
 Updated 2015-6-27 
-With rsplit and limiter=8 (monotone limiter) on Edison
+With rsplit=1 and limiter=8 (monotone limiter) on Edison
   DCMIP 1-1: L1=0.529721 L2= 0.637361 Linf= 0.616722 q_max= 0.459436 q_min= -2.24628e-08
   DCMIP 1-2: L1=0.386038 L2= 0.556078 Linf= 0.914061 q_max= 0.987406 q_min= -2.64163e-06
 On Darwin:
@@ -71,6 +86,15 @@ On Darwin:
 Updated 2015-7-14 (new direct addressing limiter)
   DCMIP 1-1: L1=0.529676 L2= 0.637311 Linf= 0.616969 q_max= 0.459701 q_min= -9.78542e-09
   DCMIP 1-2: L1=0.386039 L2= 0.556071 Linf= 0.91406 q_max= 0.987389 q_min= -2.77826e-06
+
+Updated 2015-11-27 (rsplit=3, to match CAM)
+  DCMIP 1-1: L1=0.529725 L2=0.637015 Linf=0.610602 q_max=0.458165 q_min= -9.533290e-14
+  DCMIP 1-2: L1=0.263420 L2=0.388462 Linf=0.638387 q_max=0.989853 q_min= -1.274771e-08
+
+Updated 2015-11-27 (rsplit=3, ACME 72 level configuration, skybridge)
+  DCMIP 1-1: L1=0.578151 L2=0.865526 Linf=0.883168 q_max=0.187204 q_min= -3.207090e-13
+  DCMIP 1-2: L1=0.307665 L2=0.622099 Linf=0.839133 q_max=0.813105 q_min= -9.385639e-06
+
 
 
 
@@ -96,6 +120,15 @@ Updated 2015-7-14 (new direct addressing limiter)
   DCMIP 1-1: L1=0.138438  L2= 0.202473 Linf= 0.298522 q_max= 0.974238 q_min= -7.27863e-14
   DCMIP 1-2: L1=0.0578902 L2= 0.123954 Linf= 0.270832 q_max= 0.979733 q_min= -4.54058e-14
 
+Updated 2015-11-27  (rsplit=3, to match CAM)
+  DCMIP 1-1: L1=0.138438 L2= 0.202473 Linf= 0.298522 q_max= 0.97423 q_min= -7.633613e-14
+  DCMIP 1-2: L1=0.057890 L2= 0.123954 Linf= 0.270831 q_max= 0.97973 q_min= -4.540577e-14
+
+Updated 2015-11-27  (rsplit=3, ACME 72 level config, skybridge)
+  DCMIP 1-1: L1=0.490013 L2=0.789052 Linf=0.918454 q_max=0.445141 q_min= -3.559994e-11
+  DCMIP 1-2: L1=0.121783 L2=0.361005 Linf=1.092784 q_max=0.836177 q_min= -3.671997e-05
+
+
 
 __________________________________________________________________________________________________________________
 
@@ -114,12 +147,16 @@ Updated 2015-7-14 (new direct addressing limiter)
   DCMIP 1-1: L1=0.0794911 L2= 0.139212  Linf= 0.30697  q_max= 0.984063 q_min= -1.76014e-13
   DCMIP 1-2: L1=0.0363203 L2= 0.0987048 Linf= 0.277493 q_max= 0.994146 q_min= -5.06671e-14
 
+Updated 2015-11-27 (rsplit=3, ACME 72 level config)
+  (not yet run)
 
 
 
 __________________________________________________________________________________________________________________
 
 Typical results for run_ne120_perf.sh on Edison:
+
+64L, rsplit=1  (origional mini-app configuration)
 
 A x B x C, with
 A = nodes 

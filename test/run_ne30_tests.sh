@@ -34,25 +34,26 @@ set TEST_NAME = run_ne30_tests # name of test for run directory
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
 
-if ( ${?PBS_NP} == 0) then
-  set PBS_NP = 24;                                # set default NP
-endif
-@ NUM_NODES     = $PBS_NP / 24                    # compute number of nodes from mppwidth
+set NUM_NODES = $SLURM_JOB_NUM_NODES
+set MAX_TASKS_NODE = 16        # 64 for Mira.  24/48 for Edison
+
 @ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
-@ NCPU          = $NUM_NODES * 24 / $NTHREADS     # get total number of MPI procs
-@ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
-@ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
+@ NMPI          = $NUM_NODES * $MAX_TASKS_NODE / $NTHREADS     # get total number of MPI procs
+@ NMPI_PER_NODE = $MAX_TASKS_NODE / $NTHREADS                  # get number of MPI procs per node
+@ NUM_NUMA      = $NMPI_PER_NODE / 2              # edison has 2 sockets per node
 @ statefreq     = 6 * 3600 / $TSTEP               # set diagnostic display frequency
 
-set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA"
+#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+#set RUN_COMMAND = "srun -n $NMPI"
+set RUN_COMMAND = "mpirun -n $NMPI"
+
 
 setenv OMP_NUM_THREADS $NTHREADS
 
-echo "PBS_NP        = $PBS_NP"
 echo "NUM_NODES     = $NUM_NODES"
 echo "NTHREADS      = $NTHREADS"
-echo "NUM_CPU       = $NCPU"
-echo "NCPU_PER_NODE = $NCPU_PER_NODE"
+echo "NUM_MPI       = $NMPI"
+echo "NMPI_PER_NODE = $NMPI_PER_NODE"
 echo "NUM_NUMA      = $NUM_NUMA"
 echo "statefreq     = $statefreq"
 
@@ -95,7 +96,6 @@ sed s/NE.\*/$NE/ dcmip1-1.nl                    |\
 sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/                   |\
-sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
 sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
@@ -110,7 +110,6 @@ sed s/NE.\*/$NE/ dcmip1-2.nl                    |\
 sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/                    |\
-sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
 sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-2.nl

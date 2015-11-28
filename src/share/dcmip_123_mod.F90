@@ -135,7 +135,7 @@ IMPLICIT NONE
   real(8) :: s, bs                                                      ! Shape function, and parameter
   real(8) :: lonp                                                       ! Translational longitude, depends on time
   real(8) :: ud                                                         ! Divergent part of u
-
+  real(8) :: plim
   !---------------------------------------------------------------------
   !    HEIGHT AND PRESSURE
   !---------------------------------------------------------------------
@@ -161,13 +161,17 @@ IMPLICIT NONE
 	! translational longitude
 	lonp = lon - 2.d0*pi*time/tau
 
+        ! for levels that go above ptop, set u,v using p=ptop
+        plim = max(p,ptop)
+
 	! shape function
 	bs = 0.2
-	s = 1.0 + exp( (ptop-p0)/(bs*ptop) ) - exp( (p-p0)/(bs*ptop)) - exp( (ptop-p)/(bs*ptop))
+	s = 1.0 + exp( (ptop-p0)/(bs*ptop) ) - exp( (plim-p0)/(bs*ptop)) - exp( (ptop-plim)/(bs*ptop))
 
 	! zonal velocity
 	ud = (omega0*a)/(bs*ptop) * cos(lonp) * (cos(lat)**2.0) * cos(2.0*pi*time/tau) * &
-		( - exp( (p-p0)/(bs*ptop)) + exp( (ptop-p)/(bs*ptop))  )
+		( - exp( (plim-p0)/(bs*ptop)) + exp( (ptop-plim)/(bs*ptop))  )
+
 
 	u = k0*sin(lonp)*sin(lonp)*sin(2.d0*lat)*cos(pi*time/tau) + u0*cos(lat) + ud
 
@@ -177,7 +181,7 @@ IMPLICIT NONE
 	! vertical velocity - can be changed to vertical pressure velocity by
 	! omega = -(g*p)/(Rd*T0)*w
 
-  w = -((Rd*T0)/(g*p))*omega0*sin(lonp)*cos(lat)*cos(2.0*pi*time/tau)*s
+        w = -((Rd*T0)/(g*plim))*omega0*sin(lonp)*cos(lat)*cos(2.0*pi*time/tau)*s
 
   !-----------------------------------------------------------------------
   !    TEMPERATURE IS CONSTANT 300 K
@@ -316,6 +320,8 @@ IMPLICIT NONE
                             
   real(8) :: rho0                 ! reference density at z=0 m
   real(8) :: height               ! Model level heights
+  real(8) :: hstar
+  real(8) :: ptop
 
 !-----------------------------------------------------------------------
 !    HEIGHT AND PRESSURE
@@ -326,11 +332,9 @@ IMPLICIT NONE
 	if (zcoords .eq. 1) then
 		height = z
 		p = p0 * exp(-z/H)
-
 	else
 		height = H * log(p0/p)
-    z = height
-
+                z = height
 	endif
 
 !-----------------------------------------------------------------------
@@ -354,9 +358,12 @@ IMPLICIT NONE
 !-----------------------------------------------------------------------
 !    RHO (density)
 !-----------------------------------------------------------------------
+	ptop = p0 * exp(-ztop/H)
 
-	rho = p/(Rd*T)
+	rho = max(p,ptop)/(Rd*T)
 	rho0 = p0/(Rd*T)
+
+
 
 !-----------------------------------------------------------------------
 !    THE VELOCITIES ARE TIME DEPENDENT AND THEREFORE MUST BE UPDATED
@@ -366,12 +373,16 @@ IMPLICIT NONE
 	! Zonal Velocity
 	u = u0*cos(lat)
 
+        ! for high-top model, ignore layers above ztop
+        hstar = min(height/ztop,1d0)
+
+
 	! Meridional Velocity
-	v = -(rho0/rho) * (a*w0*pi)/(K*ztop) *cos(lat)*sin(K*lat)*cos(pi*height/ztop)*cos(pi*time/tau)
+	v = -(rho0/rho) * (a*w0*pi)/(K*ztop) *cos(lat)*sin(K*lat)*cos(pi*hstar)*cos(pi*time/tau)
 
 	! Vertical Velocity - can be changed to vertical pressure velocity by omega = -g*rho*w
 	w = (rho0/rho) *(w0/K)*(-2.d0*sin(K*lat)*sin(lat) + K*cos(lat)*cos(K*lat)) &
-		*sin(pi*height/ztop)*cos(pi*time/tau)
+		*sin(pi*hstar)*cos(pi*time/tau)
 
 !-----------------------------------------------------------------------
 !     initialize Q, set to zero 

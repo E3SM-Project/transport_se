@@ -45,8 +45,10 @@
 /
 &vert_nl
   vform             = "ccm"
-  vfile_mid         = "vcoord/12k_top-64m.ascii"
-  vfile_int         = "vcoord/12k_top-64i.ascii"
+  vfile_mid         = "vcoord/acme-72m.ascii"
+  vfile_int         = "vcoord/acme-72i.ascii"
+!  vfile_mid         = "vcoord/12k_top-64m.ascii"
+!  vfile_int         = "vcoord/12k_top-64i.ascii"
 /
 &analysis_nl  
   output_dir       = "./movies/"                    ! destination dir for netcdf file

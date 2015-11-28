@@ -28,7 +28,7 @@ set VTHREADS  = 4              # number of vertical threads (column_omp)
 set NE        = 30             # number of elements per cube-edge
 set TSTEP     = 300            # time step size, in second
 set NU        = 1e15           # hyperviscosity coefficient
-set QSIZE     = 50             # number of tracers
+set QSIZE     = 35             # number of tracers
 set NHOURS    = 144            # total simulation time (12 days)
 
 set TEST_NAME = run_ne30_perf  # name of test for run directory
@@ -99,7 +99,6 @@ sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/ndays.\*/nmax=$nmax/                      |\
 sed s/qsize.\*/qsize=$QSIZE/                    |\
-sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
 sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl

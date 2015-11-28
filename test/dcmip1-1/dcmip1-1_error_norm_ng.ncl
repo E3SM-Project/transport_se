@@ -38,9 +38,8 @@ begin
 
   ; read initial and final states (time,lev,lat,long)
 
-  ; Q2(time,lev,ncol)
   q_i = f1->Q(0,:,:)                       ; get initial state
-	q_f = f1->Q(nt-1,:,:)                    ; get final state
+  q_f = f1->Q(nt-1,:,:)                    ; get final state
   dq = q_f - q_i
 
   ; get vertical extent from geopotential
@@ -64,6 +63,7 @@ begin
   dz = conform(q_i, dh, 0)
   dV = dx * dy * dz
 
+
   ; get error norms
 
   L1  =      sum(abs(dq)^1*dV) /      sum(abs(q_i - avg(q_i))^1*dV )
@@ -72,6 +72,23 @@ begin
   q_max = max(q_f)
   q_min = min(q_f)
   
-  print("DCMIP 1-1: L1="+L1+" L2= "+L2+" Linf= "+Linf+" q_max= "+q_max+" q_min= "+q_min)
+  print("DCMIP 1-1: L1="+sprintf("%8.6f",L1)+\
+" L2="+sprintf("%8.6f",L2)+" Linf="+sprintf("%8.6f",Linf)+\
+" q_max="+sprintf("%8.6f",q_max)+" q_min="+sprintf("%14.6e",q_min))
+
+  
+  ; Q2(time,lev,ncol)
+  q_i = f1->Q3(0,:,:)                       ; get initial state
+  q_f = f1->Q3(nt-1,:,:)                    ; get final state
+  dq = q_f - q_i
+  ; get error norms
+
+  L1  =      sum(abs(dq)^1*dV) /      sum(abs(q_i - avg(q_i))^1*dV )
+  L2  = sqrt(sum(abs(dq)^2*dV))/ sqrt(sum(abs(q_i - avg(q_i))^2*dV ))
+  Linf=      max(abs(dq)  *dV) /      max(abs(q_i - avg(q_i))*dV   )
+  q_max = max(q_f)
+  q_min = min(q_f)
+  
+;  print("DCMIP 1-1(Q3): L1="+L1+" L2= "+L2+" Linf= "+Linf+" q_max= "+q_max+" q_min= "+q_min)
 
 end

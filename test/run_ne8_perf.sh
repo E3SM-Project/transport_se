@@ -17,7 +17,7 @@ set TEST_NAME = run_ne8_perf  # name of test for run directory
 set NE        = 8             # number of elements per cube-edge
 set TSTEP     = 1200          # time step size, in second
 set NU        = 6e16          # hyperviscosity coefficient
-set QSIZE     = 50            # number of tracers
+set QSIZE     = 35            # number of tracers
 @ statefreq   = 144 * 3600 / $TSTEP             # set diagnostic display frequency
 
 #_______________________________________________________________________
@@ -28,7 +28,6 @@ set VTHREADS  = 1             # number of vertical threads (column_omp)
 @ NTHREADS    = $HTHREADS * $VTHREADS           # get total number of threads needed
 setenv OMP_NUM_THREADS $NTHREADS
 
-set NTASKS = 384
 set MAX_TASKS_NODE = 64
 set NNODES = $SLURM_JOB_NUM_NODES
 @ NMPI = $NNODES * $MAX_TASKS_NODE / $NTHREADS
@@ -38,7 +37,6 @@ set NNODES = $SLURM_JOB_NUM_NODES
 #set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
 set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
 
-echo "NTASKS        = $NTASKS"
 echo "NNODES        = $NNODES"
 echo "NMPI          = $NMPI"
 echo "NMPI_PER_NODE = $NMPI_PER_NODE"
@@ -83,7 +81,6 @@ sed s/NE.\*/$NE/ dcmip1-1.nl                    |\
 sed s/TIME_STEP.\*/$TSTEP/                      |\
 sed s/statefreq.\*/statefreq=$statefreq/        |\
 sed s/qsize.\*/qsize=$QSIZE/                    |\
-sed s/rsplit.\*/rsplit=1/                       |\
 sed s/NThreads.\*/NThreads=$HTHREADS/           |\
 sed s/vert_num_threads.\*/vert_num_threads=$VTHREADS/ |\
 sed s/nu_q.\*/nu_q=$NU/  >  $RUN_DIR/dcmip1-1.nl
