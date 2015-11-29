@@ -2,10 +2,18 @@
 #SBATCH -p debug
 #SBATCH -t 00:05:00
 #SBATCH -N 6
+#PBS -q debug
+#PBS -l walltime=0:30:00
+#PBS -l mppwidth=384
+#PBS -j oe
+
 
 # Runs DCMIP 1-1 with NE=8 and analyzes run times.
 #_______________________________________________________________________
 # call configure script to ensure executable exists
+if ($?PBS_O_WORKDIR) then
+  cd $PBS_O_WORKDIR
+endif
 
 set CONFIGURE_DIR = ../..     # location of configure script
 cd ${CONFIGURE_DIR}; source configure.sh
@@ -18,24 +26,25 @@ set NE        = 8             # number of elements per cube-edge
 set TSTEP     = 1200          # time step size, in second
 set NU        = 6e16          # hyperviscosity coefficient
 set QSIZE     = 35            # number of tracers
-@ statefreq   = 144 * 3600 / $TSTEP             # set diagnostic display frequency
+@ statefreq   = 480 * 3600 / $TSTEP             # set diagnostic display frequency
+
 
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
-
+# 384 elements
 set HTHREADS  = 4             # number of horizontal threads
 set VTHREADS  = 1             # number of vertical threads (column_omp)
 @ NTHREADS    = $HTHREADS * $VTHREADS           # get total number of threads needed
 setenv OMP_NUM_THREADS $NTHREADS
 
-set MAX_TASKS_NODE = 64
-set NNODES = $SLURM_JOB_NUM_NODES
+set MAX_TASKS_NODE = 24
+set NNODES = 16
 @ NMPI = $NNODES * $MAX_TASKS_NODE / $NTHREADS
 @ NMPI_PER_NODE = $NMPI / $NNODES              # get number of MPI procs per node
 @ NUM_NUMA      = $NMPI_PER_NODE / 2           # edison has 2 sockets per node
 
-#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
-set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
+set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+#set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
 
 echo "NNODES        = $NNODES"
 echo "NMPI          = $NMPI"

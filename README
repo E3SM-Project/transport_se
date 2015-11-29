@@ -148,7 +148,10 @@ Updated 2015-7-14 (new direct addressing limiter)
   DCMIP 1-2: L1=0.0363203 L2= 0.0987048 Linf= 0.277493 q_max= 0.994146 q_min= -5.06671e-14
 
 Updated 2015-11-27 (rsplit=3, ACME 72 level config)
-  (not yet run)
+  (something is wrong with the DCMIP 1-1 configuration on 72L, but it should still be ok for performace )
+  DCMIP 1-1: L1=0.479398 L2=0.782613 Linf=0.922696 q_max=0.501561 q_min= -1.070570e-09
+  DCMIP 1-2: L1=0.081287 L2=0.264887 Linf=0.591157 q_max=0.959530 q_min= -2.795861e-09
+
 
 
 
