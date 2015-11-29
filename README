@@ -159,30 +159,37 @@ ________________________________________________________________________________
 
 Typical results for run_ne120_perf.sh on Edison:
 
-64L, rsplit=1  (origional mini-app configuration)
-
 A x B x C, with
 A = nodes 
 B = mpitasks_per_node 
 C = threads_per_mpitask
 
-40 node cases.  2160 elements per node.  
+40 node cases.  2160 elements per node.  1h simulation time
 
+                                     2015-6-27            2015-11-29
+                                     50 tracers            35 tracers
+                                     64L                   72L
+                                     rsplit=1              rsplit=3
 40x24x1
-prim_advec_tracers_remap_rk2         53.343
-vertical_remap                        1.800
+prim_run                                                   42.643
+prim_advec_tracers_remap_rk2         53.343                37.195
+vertical_remap                        1.800                 1.527
 
-40x12x2                              56.085
-prim_advec_tracers_remap_rk2          1.801
-vertical_remap                       
+40x12x2   
+prim_run                                                   43.306  
+prim_advec_tracers_remap_rk2         56.085                37.826       
+vertical_remap                        1.801                 1.518  
+                                              
 
 40x6x4                               
-prim_advec_tracers_remap_rk2         63.195
-vertical_remap                        1.769
+prim_run                                                   44.176
+prim_advec_tracers_remap_rk2         63.195                38.644  
+vertical_remap                        1.769                 1.473
 
-40x12x2                               
-prim_advec_tracers_remap_rk2         88.949
-vertical_remap                        1.765
+40x2x12                               
+prim_run                                                    46.040
+prim_advec_tracers_remap_rk2         88.949                 40.390
+vertical_remap                        1.765                  1.492
 
 
 
