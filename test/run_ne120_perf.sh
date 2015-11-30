@@ -77,7 +77,7 @@ if ( ${%OMP_STATUS} != 0  && ${%COLUMN_OMP_STATUS} != 0  ) then
   setenv OMP_NESTED 1 
   setenv KMP_HOT_TEAMS 1 
   setenv KMP_HOT_TEAMS_MAX_LEVEL 2 
-  #setenv OMP_PROC_BIND spread,close 
+  setenv OMP_PROC_BIND spread,close 
   setenv | grep KMP
 endif
 

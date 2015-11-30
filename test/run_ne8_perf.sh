@@ -1,7 +1,7 @@
 #!/bin/tcsh
 #SBATCH -p debug
 #SBATCH -t 00:05:00
-#SBATCH -N 6
+#SBATCH -N 12
 #PBS -q debug
 #PBS -l walltime=0:30:00
 #PBS -l mppwidth=384
@@ -35,16 +35,31 @@ set QSIZE     = 35            # number of tracers
 set HTHREADS  = 4             # number of horizontal threads
 set VTHREADS  = 1             # number of vertical threads (column_omp)
 @ NTHREADS    = $HTHREADS * $VTHREADS           # get total number of threads needed
+
 setenv OMP_NUM_THREADS $NTHREADS
 
-set MAX_TASKS_NODE = 24
-set NNODES = 16
+#set MAX_TASKS_NODE = 24       # Edison.  48 with hyperhtreading
+set MAX_TASKS_NODE = 32        # Cori     64 with hyperhtreading
+#set MAX_TASKS_NODE = 64       # Mira
+
+set NNODES = 1
+if ( ${?SLURM_NNODES} ) then
+   set NNODES = $SLURM_NNODES
+endif
+if ( ${?SLURM_JOB_NUM_NODES} ) then
+   set NNODES = $SLURM_JOB_NUM_NODES
+endif
+if ( ${?PBS_NP} ) then
+  # hack for edison because PBS_NUM_NODES is always 1
+  @ NNODES = $PBS_NP / 24
+endif
+
 @ NMPI = $NNODES * $MAX_TASKS_NODE / $NTHREADS
 @ NMPI_PER_NODE = $NMPI / $NNODES              # get number of MPI procs per node
 @ NUM_NUMA      = $NMPI_PER_NODE / 2           # edison has 2 sockets per node
 
-set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
-#set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
+#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
 
 echo "NNODES        = $NNODES"
 echo "NMPI          = $NMPI"
@@ -59,6 +74,16 @@ echo "statefreq     = $statefreq"
 
 set OMP_STATUS        = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_OPENMP        | grep TRUE`
 set COLUMN_OMP_STATUS = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_COLUMN_OPENMP | grep TRUE`
+
+# for Intel
+if ( ${%OMP_STATUS} != 0  && ${%COLUMN_OMP_STATUS} != 0  ) then
+  setenv OMP_NESTED 1 
+  setenv KMP_HOT_TEAMS 1 
+  setenv KMP_HOT_TEAMS_MAX_LEVEL 2 
+  setenv OMP_PROC_BIND spread,close 
+  setenv | grep KMP
+endif
+
 
 if( $NTHREADS > 1 && ${%OMP_STATUS} == 0 ) then
   echo "Error: NTHREADS > 1 requires ENABLE_OPENMP=TRUE"; exit
@@ -114,6 +139,10 @@ echo "DCMIP1-1 `cat HommeTime_stats | grep prim_advance_exp`"
 echo "DCMIP1-1 `cat HommeTime_stats | grep prim_advec_tracers`"
 echo "DCMIP1-1 `cat HommeTime_stats | grep vertical_remap`"
 echo
+
+
+# NCL on cori doesn't like threads
+setenv OMP_NUM_THREADS 1
 
 # print error norms
 cp $TEST1_DIR/dcmip1-1_error_norm_ng.ncl .

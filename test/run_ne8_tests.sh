@@ -5,7 +5,7 @@
 #PBS -A acme
 #SBATCH -p debug
 #SBATCH -t 00:05:00
-#SBATCH -N 6
+#SBATCH -N 2
 
 # Runs DCMIP 1-1 and 1-2 and plots results
 #_______________________________________________________________________
@@ -34,10 +34,17 @@ set QSIZE     = 4             # number of tracers
 set HTHREADS  = 1             # number of horizontal threads
 set VTHREADS  = 1             # number of vertical threads (column_omp)
 @ NTHREADS    = $HTHREADS * $VTHREADS           # get total number of threads needed
-setenv
 setenv OMP_NUM_THREADS $NTHREADS
 
-set MAX_TASKS_NODE = 24        # 64 for Mira.  24/48 for Edison
+
+#set MAX_TASKS_NODE = 24       # Edison.  48 with hyperhtreading
+set MAX_TASKS_NODE = 32        # Cori     64 with hyperhtreading
+#set MAX_TASKS_NODE = 64       # Mira
+
+
+
+
+set NNODES = 1
 if ( ${?SLURM_NNODES} ) then
    set NNODES = $SLURM_NNODES
 endif
@@ -46,7 +53,7 @@ if ( ${?SLURM_JOB_NUM_NODES} ) then
 endif
 if ( ${?PBS_NP} ) then
   # hack for edison because PBS_NUM_NODES is always 1
-  @ NUM_NODES = $PBS_NP / 24
+  @ NNODES = $PBS_NP / 24
 endif
 
 
@@ -54,8 +61,8 @@ endif
 @ NMPI_PER_NODE = $NMPI / $NNODES              # get number of MPI procs per node
 @ NUM_NUMA      = $NMPI_PER_NODE / 2           # edison has 2 sockets per node
 
-set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
-#set RUN_COMMAND = "srun -n $NMPI"
+#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
 #set RUN_COMMAND = "mpirun -n $NMPI"
 
 echo "NNODES        = $NNODES"
