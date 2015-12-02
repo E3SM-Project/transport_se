@@ -72,6 +72,7 @@ module edge_mod
 
   public :: edgerotate
   public :: buffermap
+  logical, private :: threadsafe=.true.
 
   real(kind=real_kind), parameter, public :: edgeDefaultVal = 1.11e+100_real_kind
 
@@ -382,6 +383,12 @@ contains
 
     call t_adj_detailf(+2)
     call t_startf('edge_pack')
+    if(.not. threadsafe) then
+#if (defined HORIZ_OPENMP)
+!$OMP BARRIER
+#endif
+       threadsafe=.true.
+    end if
 
     is = desc%putmapP(south)
     ie = desc%putmapP(east)
@@ -525,6 +532,13 @@ contains
     logical, parameter :: UseUnroll = .TRUE.
     integer :: i,k,ir,l,is,ie,in,iw
 
+    if(.not. threadsafe) then
+#if (defined HORIZ_OPENMP)
+!$OMP BARRIER
+#endif
+       threadsafe=.true.
+    end if
+
     is = desc%putmapP(south)
     ie = desc%putmapP(east)
     in = desc%putmapP(north)
@@ -655,6 +669,7 @@ contains
 
     call t_adj_detailf(+2)
     call t_startf('edge_unpack')
+    threadsafe=.false.
 
     is=desc%getmapP(south)
     ie=desc%getmapP(east)
@@ -745,6 +760,8 @@ contains
     logical, parameter :: UseUnroll = .TRUE.
     integer :: i,k,l
     integer :: is,ie,in,iw
+
+    threadsafe=.false.
 
     if (max_corner_elem.ne.1 .and. ne==0) then
         ! MNL: this is used to construct the dual grid on the cube,
@@ -931,6 +948,8 @@ contains
     integer :: i,k
     integer :: is,ie,in,iw
 
+    threadsafe=.false.
+
     is=desc%getmapP(south)
     ie=desc%getmapP(east)
     in=desc%getmapP(north)
@@ -966,6 +985,8 @@ contains
     integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('edgeVunpackMAX')
+
+    threadsafe=.false.
 
     is=desc%getmapP(south)
     ie=desc%getmapP(east)
@@ -1026,6 +1047,8 @@ contains
     integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('edgeVunpackMIN')
+
+    threadsafe=.false.
 
     is=desc%getmapP(south)
     ie=desc%getmapP(east)
@@ -1091,6 +1114,8 @@ contains
     integer :: is,ie,in,iw,sw,se,ne,nw
 
     call t_startf('LongEdgeVunpackMIN')
+
+    threadsafe=.false.
 
     is=desc%getmapP(south)
     ie=desc%getmapP(east)
