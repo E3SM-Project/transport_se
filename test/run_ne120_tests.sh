@@ -30,13 +30,23 @@ set NU        = 1e13           # hyperviscosity coefficient
 set QSIZE     = 4              # number of tracers
 @ statefreq     = 24 * 3600 / $TSTEP              # set diagnostic display frequency
 
-set TEST_NAME = run_ne30_tests # name of test for run directory
+set TEST_NAME = run_ne120_tests # name of test for run directory
 
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
 
-set MAX_TASKS_NODE = 16        # 64 for Mira.  24/48 for Edison
-set NUM_NODES = $SLURM_JOB_NUM_NODES
+set MAX_TASKS_NODE = 24        # 64 for Mira.  24/48 for Edison
+if ( ${?SLURM_NNODES} ) then
+   set NUM_NODES = $SLURM_NNODES
+endif
+if ( ${?SLURM_JOB_NUM_NODES} ) then
+   set NUM_NODES = $SLURM_JOB_NUM_NODES
+endif
+if ( ${?PBS_NP} ) then
+  # hack for edison because PBS_NUM_NODES is always 1
+  @ NUM_NODES = $PBS_NP / 24
+endif
+
 
 @ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
 @ NMPI          = $NUM_NODES * $MAX_TASKS_NODE / $NTHREADS     # get total number of MPI procs
@@ -44,9 +54,9 @@ set NUM_NODES = $SLURM_JOB_NUM_NODES
 @ NUM_NUMA      = $NMPI_PER_NODE / 2              # edison has 2 sockets per node
 
 
-#set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA"
+set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA"
 #set RUN_COMMAND = "srun -n $NMPI"
-set RUN_COMMAND = "mpirun -n $NMPI"
+#set RUN_COMMAND = "mpirun -n $NMPI"
 
 setenv OMP_NUM_THREADS $NTHREADS
 

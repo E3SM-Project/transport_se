@@ -115,7 +115,6 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   real(kind=real_kind), dimension(       nlev+1 ) :: masso  !Accumulate mass up to each interface
   real(kind=real_kind), dimension(  1-gs:nlev+gs) :: ao     !Tracer value on old grid
   real(kind=real_kind), dimension(  1-gs:nlev+gs) :: dpo    !change in pressure over a cell for old grid
-  real(kind=real_kind), dimension(  1-gs:nlev+gs) :: dpn    !change in pressure over a cell for old grid
   real(kind=real_kind), dimension(3,     nlev   ) :: coefs  !PPM coefficients within each cell
   real(kind=real_kind), dimension(       nlev   ) :: z1, z2
   real(kind=real_kind) :: ppmdx(10,0:nlev+1)  !grid spacings
@@ -123,15 +122,18 @@ subroutine remap_Q_ppm(Qdp,nx,qsize,dp1,dp2)
   integer :: i, j, k, q, kk, kid(nlev)
 
   call t_startf('remap_Q_ppm')
+#if (defined COLUMN_OPENMP)
+    !$omp parallel do collapse(2) &
+    !$omp& private(pio,pin,masso,ao,dpo,coefs,z1,z2,ppmdx,mymass,massn1,massn2,i,j,k,q,kk,kid)
+#endif
   do j = 1 , nx
     do i = 1 , nx
 
       pin(1)=0
       pio(1)=0
       do k=1,nlev
-         dpn(k)=dp2(i,j,k)
          dpo(k)=dp1(i,j,k)
-         pin(k+1)=pin(k)+dpn(k)
+         pin(k+1)=pin(k)+dp2(i,j,k)
          pio(k+1)=pio(k)+dpo(k)
       enddo
 
@@ -419,7 +421,35 @@ module prim_advection_mod
   public :: Prim_Advec_Tracers_remap, Prim_Advec_Tracers_remap_rk2
   public :: vertical_remap
 
-  type (EdgeBuffer_t) :: edgeAdv, edgeAdvQ3, edgeAdv_p1, edgeAdvQ2, edgeAdv1,  edgeveloc
+#if defined HORIZ_OPENMP
+  ! Note on edge buffers with horizontal threading (defined HORIZ_OPENMP).
+  !   Previously, there was a race condition that affected horizontal
+  ! threading. At the end of euler_step, the following sequence occurs:
+  !     pack', barrier, exchange, barrier, unpack*.
+  ! There may also be a pack** at the beginning of euler_step. Depending on
+  ! rhs_multiplier, pack** may or may not be pack'. Between unpack* and pack',
+  ! there is no barrier. Hence if unpack* and pack' use the same memory, there
+  ! is a race condition on that memory.
+  !   This race condition was observed by BFB comparison of output for
+  ! dcmip1-1. Thread counts 2 to 20 were run, and the results compared against
+  ! those from ! HORIZ_OPENMP.
+  !   The solution is to introduce logic to make sure unpack* and pack' never
+  ! share buffer space. The logic has to account for the fact that pack' may or
+  ! may not be pack**. To account for these complexities, 2*(qsize + 1)*nlev
+  ! extra space is allocated if HORIZ_OPENMP. No additional space is used if !
+  ! HORIZ_OPENMP, but for code generality, two extra pointers and a module-level
+  ! integer are used even in that case.
+  integer, parameter :: n_edge_bufs = 2
+  ! Alternate between edge_Adv[_p1](0) and (1) as a function of RK2 stage.
+  ! Each horizontal thread must own this indexer.
+  !$omp threadprivate(i_edge_buf)
+#else
+  integer, parameter :: n_edge_bufs = 1
+#endif
+  integer :: i_edge_buf
+
+  type (EdgeBuffer_t) :: edgeAdvQ3, edgeAdvQ2, edgeAdv1, edgeveloc, &
+       edgeAdv(0:n_edge_bufs-1), edgeAdv_p1(0:n_edge_bufs-1)
 
   integer,parameter :: DSSeta = 1
   integer,parameter :: DSSomega = 2
@@ -444,20 +474,35 @@ contains
     ! threads. But in this case we want shared pointers.
     real(kind=real_kind), pointer :: buf_ptr(:) => null()
     real(kind=real_kind), pointer :: receive_ptr(:) => null()
+    real(kind=real_kind), pointer :: buf_horiz_0_ptr(:) => null()
+    real(kind=real_kind), pointer :: receive_horiz_0_ptr(:) => null()
+#if defined HORIZ_OPENMP
+    real(kind=real_kind), pointer :: buf_horiz_1_ptr(:) => null()
+    real(kind=real_kind), pointer :: receive_horiz_1_ptr(:) => null()    
+#endif
 
     ! this might be called with qsize=0
     ! allocate largest one first
     ! Currently this is never freed. If it was, only this first one should
     ! be freed, as only it knows the true size of the buffer.
     call initEdgeBuffer(par,edgeAdvQ3,max(nlev,qsize*nlev*3), buf_ptr, receive_ptr)  ! Qtens,Qmin, Qmax
-
-    ! remaining edge buffers can share %buf and %receive with edgeAdvQ3
-    ! (This is done through the optional 1D pointer arguments.)
-    call initEdgeBuffer(par,edgeAdv1,nlev,buf_ptr,receive_ptr)
-    call initEdgeBuffer(par,edgeAdv,qsize*nlev,buf_ptr,receive_ptr)
-    call initEdgeBuffer(par,edgeAdv_p1,qsize*nlev + nlev,buf_ptr,receive_ptr)
+    ! These two can always share the buffer space with edgeAdvQ3.
+    call initEdgeBuffer(par,edgeveloc,2*nlev,buf_ptr,receive_ptr)
     call initEdgeBuffer(par,edgeAdvQ2,qsize*nlev*2,buf_ptr,receive_ptr)  ! Qtens,Qmin, Qmax
-    call initEdgeBuffer(par,edgeveloc,2*nlev)
+    ! These two can if ! HORIZ_OPENMP.
+#if ! defined HORIZ_OPENMP
+    buf_horiz_0_ptr => buf_ptr
+    receive_horiz_0_ptr => receive_ptr
+#endif
+    call initEdgeBuffer(par,edgeAdv_p1(0),qsize*nlev + nlev, buf_horiz_0_ptr, receive_horiz_0_ptr)
+    call initEdgeBuffer(par,edgeAdv(0),qsize*nlev, buf_horiz_0_ptr, receive_horiz_0_ptr)
+#if defined HORIZ_OPENMP
+    ! These two exist only if HORIZ_OPENMP. They cannot shared space with any
+    ! other.
+    call initEdgeBuffer(par, edgeAdv_p1(1), qsize*nlev + nlev, buf_horiz_1_ptr, receive_horiz_1_ptr)
+    call initEdgeBuffer(par, edgeAdv(1), qsize*nlev, buf_horiz_1_ptr, receive_horiz_1_ptr)
+#endif
+    i_edge_buf = 0
 
     ! Don't actually want these saved, if this is ever called twice.
     nullify(buf_ptr)
@@ -546,9 +591,6 @@ contains
     integer              , intent(in   ) :: nets
     integer              , intent(in   ) :: nete
 
-    real (kind=real_kind), dimension(np,np,2     ) :: gradQ
-    real (kind=real_kind), dimension(np,np  ,nlev) :: dp_star
-    real (kind=real_kind), dimension(np,np  ,nlev) :: dp_np1
     integer :: i,j,k,l,ie,q,nmin
     integer :: nfilt,rkstage,rhs_multiplier
     integer :: n0_qdp, np1_qdp
@@ -571,15 +613,13 @@ contains
     !       and a DSS'ed version stored in derived%div(:,:,:,2)
     do ie=nets,nete
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k, gradQ)
+!$omp parallel do private(k)
 #endif
       do k=1,nlev
         ! div( U dp Q),
-        gradQ(:,:,1)=elem(ie)%derived%vn0(:,:,1,k)
-        gradQ(:,:,2)=elem(ie)%derived%vn0(:,:,2,k)
-        elem(ie)%derived%divdp(:,:,k) = divergence_sphere(gradQ,deriv,elem(ie))
+        elem(ie)%derived%divdp(:,:,k) = divergence_sphere(elem(ie)%derived%vn0(:,:,:,k),deriv,elem(ie))
+        elem(ie)%derived%divdp_proj(:,:,k) = elem(ie)%derived%divdp(:,:,k)
       enddo
-      elem(ie)%derived%divdp_proj(:,:,:) = elem(ie)%derived%divdp(:,:,:)
     enddo
 
     !rhs_multiplier is for obtaining dp_tracers at each stage:
@@ -663,12 +703,12 @@ contains
   real(kind=real_kind), dimension(np,np                       ) :: divdp, dpdiss
   real(kind=real_kind), dimension(np,np,2                     ) :: gradQ
   real(kind=real_kind), dimension(np,np,2,nlev                ) :: Vstar
-  real(kind=real_kind), dimension(np,np  ,nlev                ) :: Qtens
+  real(kind=real_kind), dimension(np,np                       ) :: Qtens
   real(kind=real_kind), dimension(np,np  ,nlev                ) :: dp,dp_star
   real(kind=real_kind), dimension(np,np  ,nlev,qsize,nets:nete) :: Qtens_biharmonic
   real(kind=real_kind), pointer, dimension(:,:,:)               :: DSSvar
   real(kind=real_kind) :: dp0
-  real(kind=real_kind) :: tmp1(nlev),tmp2(nlev)
+  real(kind=real_kind) :: tmp1, tmp2
   integer :: ie,q,i,j,k
   integer :: rhs_viss
 
@@ -723,12 +763,15 @@ contains
     ! compute element qmin/qmax
     if ( rhs_multiplier == 0 ) then
       do ie = nets , nete
-        do k = 1 , nlev
-          do q = 1 , qsize
-            qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
-            qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1 , nlev
+               qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
+               qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
+            enddo
+         enddo
       enddo
       ! update qmin/qmax based on neighbor data for lim8
       call neighbor_minmax(elem,hybrid,edgeAdvQ2,nets,nete,qmin(:,:,nets:nete),qmax(:,:,nets:nete))
@@ -737,26 +780,32 @@ contains
     ! lets just reuse the old neighbor min/max, but update based on local data
     if ( rhs_multiplier == 1 ) then
       do ie = nets , nete
-        do k = 1 , nlev    !  Loop index added with implicit inversion (AAM)
-          do q = 1 , qsize
-            qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
-            qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1 , nlev
+               qmin(k,q,ie)=min(qmin(k,q,ie),minval(Qtens_biharmonic(:,:,k,q,ie)))
+               qmax(k,q,ie)=max(qmax(k,q,ie),maxval(Qtens_biharmonic(:,:,k,q,ie)))
+            enddo
+         enddo
       enddo
-    endif
+   endif
 
     ! get niew min/max values, and also compute biharmonic mixing term
     if ( rhs_multiplier == 2 ) then
       rhs_viss = 3
       ! compute element qmin/qmax
       do ie = nets , nete
-        do k = 1  ,nlev
-          do q = 1 , qsize
-            qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
-            qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
-          enddo
-        enddo
+#if (defined COLUMN_OPENMP)
+         !$omp parallel do collapse(2) private(k, q)
+#endif
+         do q = 1 , qsize
+            do k = 1  ,nlev
+               qmin(k,q,ie)=minval(Qtens_biharmonic(:,:,k,q,ie))
+               qmax(k,q,ie)=maxval(Qtens_biharmonic(:,:,k,q,ie))
+            enddo
+         enddo
       enddo
 
       call biharmonic_wk_scalar_minmax( elem , qtens_biharmonic , deriv , edgeAdvQ3 , hybrid , &
@@ -804,59 +853,62 @@ contains
 
     ! advance Qdp
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(q,k,gradQ,dp_star,qtens,dpdiss,tmp1,tmp2)
+    !$omp parallel private(q,k,gradQ,qtens,dpdiss,tmp1,tmp2)
 #endif
-    do q = 1 , qsize
-      do k = 1 , nlev  !  dp_star used as temporary instead of divdp (AAM)
-        ! div( U dp Q),
-        gradQ(:,:,1) = Vstar(:,:,1,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        gradQ(:,:,2) = Vstar(:,:,2,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
-        dp_star(:,:,k) = divergence_sphere( gradQ , deriv , elem(ie) )
-        Qtens(:,:,k) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * dp_star(:,:,k)
-        ! optionally add in hyperviscosity computed above:
-        if ( rhs_viss /= 0 ) Qtens(:,:,k) = Qtens(:,:,k) + Qtens_biharmonic(:,:,k,q,ie)
-      enddo
-
-      if ( limiter_option == 8) then
-        do k = 1 , nlev  ! Loop index added (AAM)
+    if (limiter_option == 8) then
+#if (defined COLUMN_OPENMP)
+       !$omp do
+#endif
+       do k = 1, nlev
           ! UN-DSS'ed dp at timelevel n0+1:
           dp_star(:,:,k) = dp(:,:,k) - dt * elem(ie)%derived%divdp(:,:,k)
-        enddo
+       enddo
+    endif
+#if (defined COLUMN_OPENMP)
+    !$omp do collapse(2)
+#endif
+    do q = 1, qsize
+       do k = 1, nlev
+          ! div( U dp Q),
+          gradQ(:,:,1) = Vstar(:,:,1,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          gradQ(:,:,2) = Vstar(:,:,2,k) * elem(ie)%state%Qdp(:,:,k,q,n0_qdp)
+          Qtens(:,:) = divergence_sphere( gradQ , deriv , elem(ie) )
+          Qtens(:,:) = elem(ie)%state%Qdp(:,:,k,q,n0_qdp) - dt * Qtens(:,:)
+          ! optionally add in hyperviscosity computed above:
+          if ( rhs_viss /= 0 ) Qtens(:,:) = Qtens(:,:) + Qtens_biharmonic(:,:,k,q,ie)
 
-        do k=1,nlev
-           tmp1(k) = sum(Qtens(:,:,k)*elem(ie)%spheremp(:,:))
-        enddo
+          if ( limiter_option == 8) then
+#ifdef TRANSPORT_SE_DEBUG
+             tmp1 = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
+#endif
 
-        ! apply limiter to Q = Qtens / dp_star
-        call limiter_optim_iter_full( Qtens(:,:,:) , elem(ie)%spheremp(:,:) , qmin(:,q,ie) , &
-                                      qmax(:,q,ie) , dp_star(:,:,:) )
+             ! apply limiter to Q = Qtens / dp_star
+             call limiter_optim_iter_full( Qtens(:,:) , elem(ie)%spheremp(:,:) , qmin(k,q,ie) , &
+                  qmax(k,q,ie) , dp_star(:,:,k) )
 
-        do k=1,nlev
-           tmp2(k) = sum(Qtens(:,:,k)*elem(ie)%spheremp(:,:))
-           if (abs(tmp1(k)-tmp2(k)).gt. 1e-5 ) then
-              print *,'ie,k=',ie,k,' diff=',abs(tmp1(k)-tmp2(k))
-              print *,'sums=',tmp1(k),tmp2(k)
-           endif
-        enddo
+#ifdef TRANSPORT_SE_DEBUG
+             tmp2 = sum(Qtens(:,:)*elem(ie)%spheremp(:,:))
+             if (abs(tmp1-tmp2).gt. 1e-5 ) then
+                print *,'ie,k=',ie,k,' diff=',abs(tmp1-tmp2)
+                print *,'sums=',tmp1,tmp2
+             endif
+#endif
+          endif
 
-      endif
-
-
-
-
-      ! apply mass matrix, overwrite np1 with solution:
-      ! dont do this earlier, since we allow np1_qdp == n0_qdp
-      ! and we dont want to overwrite n0_qdp until we are done using it
-      do k = 1 , nlev
-        elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:,k)
-      enddo
-
+          ! apply mass matrix, overwrite np1 with solution:
+          ! dont do this earlier, since we allow np1_qdp == n0_qdp
+          ! and we dont want to overwrite n0_qdp until we are done using it
+          elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%spheremp(:,:) * Qtens(:,:)
+       enddo
     enddo
+#if (defined COLUMN_OPENMP)
+    !$omp end parallel
+#endif
 
     if ( DSSopt == DSSno_var ) then
-      call edgeVpack(edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVpack(edgeAdv(i_edge_buf)    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
     else
-      call edgeVpack(edgeAdv_p1 , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVpack(edgeAdv_p1(i_edge_buf) , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
       ! also DSS extra field
 #if (defined COLUMN_OPENMP)
 !$omp parallel do private(k)
@@ -864,14 +916,14 @@ contains
       do k = 1 , nlev
         DSSvar(:,:,k) = elem(ie)%spheremp(:,:) * DSSvar(:,:,k)
       enddo
-      call edgeVpack( edgeAdv_p1 , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , elem(ie)%desc )
+      call edgeVpack( edgeAdv_p1(i_edge_buf) , DSSvar(:,:,1:nlev) , nlev , nlev*qsize , elem(ie)%desc )
     endif
   enddo
 
   if ( DSSopt == DSSno_var ) then
-    call bndry_exchangeV( hybrid , edgeAdv    )
+    call bndry_exchangeV( hybrid , edgeAdv(i_edge_buf)    )
   else
-    call bndry_exchangeV( hybrid , edgeAdv_p1 )
+    call bndry_exchangeV( hybrid , edgeAdv_p1(i_edge_buf) )
   endif
 
   do ie = nets , nete
@@ -880,9 +932,9 @@ contains
     if ( DSSopt == DSSdiv_vdp_ave ) DSSvar => elem(ie)%derived%divdp_proj(:,:,:)
 
     if ( DSSopt == DSSno_var ) then
-      call edgeVunpack( edgeAdv    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVunpack( edgeAdv(i_edge_buf)    , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
-!$omp parallel do private(k,q)
+!$omp parallel do collapse(2) private(k,q)
 #endif
       do q = 1 , qsize
         do k = 1 , nlev    !  Potential loop inversion (AAM)
@@ -890,22 +942,25 @@ contains
         enddo
       enddo
     else
-      call edgeVunpack( edgeAdv_p1 , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
+      call edgeVunpack( edgeAdv_p1(i_edge_buf) , elem(ie)%state%Qdp(:,:,:,:,np1_qdp) , nlev*qsize , 0 , elem(ie)%desc )
 #if (defined COLUMN_OPENMP)
-      !$omp parallel do private(q,k)
+      !$omp parallel do collapse(2) private(q,k)
 #endif
       do q = 1 , qsize
         do k = 1 , nlev    !  Potential loop inversion (AAM)
           elem(ie)%state%Qdp(:,:,k,q,np1_qdp) = elem(ie)%rspheremp(:,:) * elem(ie)%state%Qdp(:,:,k,q,np1_qdp)
         enddo
       enddo
-      call edgeVunpack( edgeAdv_p1 , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , elem(ie)%desc )
+      call edgeVunpack( edgeAdv_p1(i_edge_buf) , DSSvar(:,:,1:nlev) , nlev , qsize*nlev , elem(ie)%desc )
 
       do k = 1 , nlev
         DSSvar(:,:,k) = DSSvar(:,:,k) * elem(ie)%rspheremp(:,:)
       enddo
     endif
   enddo
+#if defined HORIZ_OPENMP
+  i_edge_buf = mod(i_edge_buf + 1, 2)
+#endif
 #ifdef DEBUGOMP
 #if (defined HORIZ_OPENMP)
 !$OMP BARRIER
@@ -935,9 +990,9 @@ contains
     use kinds         , only : real_kind
     use dimensions_mod, only : np, np, nlev
 
-    real (kind=real_kind), dimension(nlev), intent(inout)   :: minp, maxp
-    real (kind=real_kind), dimension(np,np,nlev), intent(inout)   :: ptens
-    real (kind=real_kind), dimension(np,np,nlev), intent(in), optional  :: dpmass
+    real (kind=real_kind), intent(inout)   :: minp, maxp
+    real (kind=real_kind), dimension(np,np), intent(inout)   :: ptens
+    real (kind=real_kind), dimension(np,np), intent(in), optional  :: dpmass
     real (kind=real_kind), dimension(np,np), intent(in)   :: sphweights
 
     real (kind=real_kind), dimension(np,np) :: ptens_mass
@@ -948,19 +1003,17 @@ contains
     real (kind=real_kind) :: tol_limiter = 5e-14
 
  
-    do k=1,nlev
-
      k1=1
      do i=1,np
      do j=1,np
-       c(k1)=sphweights(i,j)*dpmass(i,j,k)
-       x(k1)=ptens(i,j,k)/dpmass(i,j,k)
+       c(k1)=sphweights(i,j)*dpmass(i,j)
+       x(k1)=ptens(i,j)/dpmass(i,j)
        k1=k1+1
       enddo
      enddo
 
      sumc=sum(c)
-     if (sumc <= 0 ) CYCLE   ! this should never happen, but if it does, dont limit
+     if (sumc <= 0 ) return   ! this should never happen, but if it does, dont limit
      mass=sum(c*x)
 
     
@@ -968,11 +1021,11 @@ contains
       ! relax constraints to ensure limiter has a solution:
       ! This is only needed if runnign with the SSP CFL>1 or
       ! due to roundoff errors
-      if( mass < minp(k)*sumc ) then
-        minp(k) = mass / sumc
+      if( mass < minp*sumc ) then
+        minp = mass / sumc
       endif
-      if( mass > maxp(k)*sumc ) then
-        maxp(k) = mass / sumc
+      if( mass > maxp*sumc ) then
+        maxp = mass / sumc
       endif
 
     
@@ -982,13 +1035,13 @@ contains
       addmass=0.0d0
 
        do k1=1,np*np
-         if((x(k1)>maxp(k))) then
-           addmass=addmass+(x(k1)-maxp(k))*c(k1)
-           x(k1)=maxp(k)
+         if((x(k1)>maxp)) then
+           addmass=addmass+(x(k1)-maxp)*c(k1)
+           x(k1)=maxp
          endif
-         if((x(k1)<minp(k))) then
-           addmass=addmass-(minp(k)-x(k1))*c(k1)
-           x(k1)=minp(k)
+         if((x(k1)<minp)) then
+           addmass=addmass-(minp-x(k1))*c(k1)
+           x(k1)=minp
          endif
        enddo !k1
 
@@ -998,26 +1051,26 @@ contains
 !       weightsnum=0
        if(addmass>0)then
         do k1=1,np*np
-          if(x(k1)<maxp(k))then
+          if(x(k1)<maxp)then
             weightssum=weightssum+c(k1)
 !            weightsnum=weightsnum+1
           endif
         enddo !k1
         do k1=1,np*np
-          if(x(k1)<maxp(k))then
+          if(x(k1)<maxp)then
               x(k1)=x(k1)+addmass/weightssum
 !              x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
         enddo
       else
         do k1=1,np*np
-          if(x(k1)>minp(k))then
+          if(x(k1)>minp)then
             weightssum=weightssum+c(k1)
 !            weightsnum=weightsnum+1
           endif
         enddo
         do k1=1,np*np
-          if(x(k1)>minp(k))then
+          if(x(k1)>minp)then
             x(k1)=x(k1)+addmass/weightssum
 !           x(k1)=x(k1)+addmass/(c(k1)*weightsnum)
           endif
@@ -1030,16 +1083,13 @@ contains
    k1=1
    do i=1,np
     do j=1,np
-      ptens(i,j,k)=x(k1)
+      ptens(i,j)=x(k1)
       k1=k1+1
     enddo
    enddo
 
-  enddo
 
-  do k=1,nlev
-    ptens(:,:,k)=ptens(:,:,k)*dpmass(:,:,k)
-  enddo
+    ptens(:,:)=ptens(:,:)*dpmass(:,:)
  
   end subroutine limiter_optim_iter_full
 

@@ -21,7 +21,7 @@ cd ${CONFIGURE_DIR}; source configure.sh
 #_______________________________________________________________________
 # set test parameters
 
-set HTHREADS  = 1              # number of horizontal threads
+set HTHREADS  = 2              # number of horizontal threads
 set VTHREADS  = 1              # number of vertical threads (column_omp)
 
 set NE        = 120            # number of elements per cube-edge
@@ -35,34 +35,56 @@ set TEST_NAME = run_ne120_perf # name of test for run directory
 #_______________________________________________________________________
 # compute run parameters from number of procs and number of threads
 
-if ( ${?PBS_NP} == 0) then
-  set PBS_NP = 24;                                # set default NP
+set MAX_TASKS_NODE = 24        # 64 for Mira.  24/48 for Edison
+set NUM_NODES = 1
+if ( ${?SLURM_NNODES} ) then
+   set NUM_NODES = $SLURM_NNODES
 endif
-@ NUM_NODES     = $PBS_NP / 24                    # compute number of nodes from mppwidth
+if ( ${?SLURM_JOB_NUM_NODES} ) then
+   set NUM_NODES = $SLURM_JOB_NUM_NODES
+endif
+if ( ${?PBS_NP} ) then
+  # hack for edison because PBS_NUM_NODES is always 1
+  @ NUM_NODES = $PBS_NP / 24
+endif
+
 @ NTHREADS      = $HTHREADS * $VTHREADS           # get total number of threads needed
-@ NCPU          = $NUM_NODES * 24 / $NTHREADS     # get total number of MPI procs
-@ NCPU_PER_NODE = 24 / $NTHREADS                  # get number of MPI procs per node
-@ NUM_NUMA      = $NCPU_PER_NODE / 2              # edison has 2 sockets per node
+@ NMPI          = $NUM_NODES * $MAX_TASKS_NODE / $NTHREADS     # get total number of MPI procs
+@ NMPI_PER_NODE = $MAX_TASKS_NODE / $NTHREADS                  # get number of MPI procs per node
+@ NUM_NUMA      = $NMPI_PER_NODE / 2              # edison has 2 sockets per node
 @ statefreq     = 48 * 3600 / $TSTEP              # set diagnostic display frequency
 @ nmax          = $NHOURS * 3600 / $TSTEP         # get max number of timesteps
 
-set RUN_COMMAND = "aprun -n $NCPU -N $NCPU_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA  -ss -cc numa_node"
+#set RUN_COMMAND = "srun -n $NMPI"
+#set RUN_COMMAND = "mpirun -n $NMPI"
 
-setenv OMP_NUM_THREADS $NTHREADS
-
-echo "PBS_NP        = $PBS_NP"
 echo "NUM_NODES     = $NUM_NODES"
-echo "NTHREADS      = $NTHREADS"
-echo "NUM_CPU       = $NCPU"
-echo "NCPU_PER_NODE = $NCPU_PER_NODE"
+echo "NTHREADS      = $NTHREADS  ($HTHREADS x $VTHREADS)"
+echo "NUM_MPI       = $NMPI"
+echo "NMPI_PER_NODE = $NMPI_PER_NODE"
 echo "NUM_NUMA      = $NUM_NUMA"
 echo "statefreq     = $statefreq"
+
+setenv OMP_NUM_THREADS $NTHREADS
+setenv OMP_STACKSIZE 64M
+
+set OMP_STATUS        = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_OPENMP        | grep TRUE`
+set COLUMN_OMP_STATUS = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_COLUMN_OPENMP | grep TRUE`
+
+# for Intel
+if ( ${%OMP_STATUS} != 0  && ${%COLUMN_OMP_STATUS} != 0  ) then
+  setenv OMP_NESTED 1 
+  setenv KMP_HOT_TEAMS 1 
+  setenv KMP_HOT_TEAMS_MAX_LEVEL 2 
+  setenv OMP_PROC_BIND spread,close 
+  setenv | grep KMP
+endif
+
 
 #_______________________________________________________________________
 # check for some common errors
 
-set OMP_STATUS        = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_OPENMP        | grep TRUE`
-set COLUMN_OMP_STATUS = `cat $BLD_DIR/CMakeCache.txt | grep ENABLE_COLUMN_OPENMP | grep TRUE`
 
 if( $NTHREADS > 1 && ${%OMP_STATUS} == 0 ) then
   echo "Error: NTHREADS > 1 requires ENABLE_OPENMP=TRUE"; exit
