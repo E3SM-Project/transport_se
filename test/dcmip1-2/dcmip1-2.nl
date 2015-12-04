@@ -57,5 +57,6 @@
 /
 &prof_inparm
   profile_outpe_num   = 512
-  profile_single_file	= .true.
+  profile_single_file = .true.
+  profile_timer       = 4
 /

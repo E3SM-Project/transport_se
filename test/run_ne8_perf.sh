@@ -58,8 +58,12 @@ endif
 @ NMPI_PER_NODE = $NMPI / $NNODES              # get number of MPI procs per node
 @ NUM_NUMA      = $NMPI_PER_NODE / 2           # edison has 2 sockets per node
 
+# Edison
 #set RUN_COMMAND = "aprun -n $NMPI -N $NMPI_PER_NODE -d $NTHREADS -S $NUM_NUMA -ss -cc numa_node"
+# Cori
 set RUN_COMMAND = "srun -n $NMPI -c $NTHREADS"
+# Mira
+#set RUN_COMMAND="qsub -t 15 -n $NNODES --proccount $NMPI --mode c$NMPI_PER_NODE "
 
 echo "NNODES        = $NNODES"
 echo "NMPI          = $NMPI"
@@ -95,9 +99,10 @@ endif
 
 #_______________________________________________________________________
 # create directories for simulation output
-
+#
 set JDATE=`date "+%y-%m-%d_%H%M%S"`
-set RUN_DIR = $WORK/${TEST_NAME}_$JDATE
+set PCONF="${NNODES}x${NMPI_PER_NODE}x${HTHREADS}x${VTHREADS}"
+set RUN_DIR = $WORK/${TEST_NAME}_${PCONF}_$JDATE
 mkdir -p $RUN_DIR/movies
 cd $RUN_DIR
 
@@ -126,6 +131,7 @@ cd $RUN_DIR
 date
 
 # run dcmip test 1-1
+#${RUN_COMMAND} -i dcmip1-1.nl $EXE # on Mira
 echo "${RUN_COMMAND} $EXE < dcmip1-1.nl"
 ${RUN_COMMAND} $EXE < dcmip1-1.nl
 if($status) exit
