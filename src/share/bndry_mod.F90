@@ -71,9 +71,6 @@ contains
     !==================================================
     !  Fire off the sends
     !==================================================
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(icycle,pCycle,ierr,dest,length,tag,iptr,errorcode)
-#endif
     do icycle=1,nSendCycles
        pCycle         => pSchedule%SendCycle(icycle)
        dest           = pCycle%dest - 1
@@ -92,9 +89,6 @@ contains
     !==================================================
     !  Post the Receives 
     !==================================================
-#if (defined COLUMN_OPENMP)
-!$omp parallel do private(icycle,pCycle,ierr,source,length,tag,iptr,errorcode)
-#endif
     do icycle=1,nRecvCycles
        pCycle         => pSchedule%RecvCycle(icycle)
        source         = pCycle%source - 1
